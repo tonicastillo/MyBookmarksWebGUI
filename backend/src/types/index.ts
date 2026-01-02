@@ -10,7 +10,16 @@ export interface Bookmark {
   status: 'Not started' | 'In progress' | 'Done'
   valoration?: '⭐' | '⭐⭐' | '⭐⭐⭐' | '⭐⭐⭐⭐' | '⭐⭐⭐⭐⭐'
   imageUrl?: string
+  imageUrlDark?: string
   createdTime: string
+}
+
+/**
+ * Bookmark con URLs originales de Notion (para sincronización S3)
+ */
+export interface BookmarkWithOriginalImages extends Bookmark {
+  originalImageUrl?: string
+  originalImageUrlDark?: string
 }
 
 export interface Category {

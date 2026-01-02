@@ -1,5 +1,5 @@
 import { Client } from '@notionhq/client'
-import type { Bookmark, Category } from '../types/index.js'
+import type { BookmarkWithOriginalImages, Category } from '../types/index.js'
 
 const notion = new Client({
   auth: process.env.NOTION_API_KEY
@@ -84,21 +84,26 @@ const getFormula = (property: NotionProperty): string => {
   return ''
 }
 
-const getFileUrl = (property: NotionProperty): string => {
-  if (property.type === 'files' && property.files.length > 0) {
-    const file = property.files[0]
-    if (file.type === 'file') {
+/**
+ * Extrae todas las URLs de un campo de tipo files
+ * Retorna un array con las URLs (puede estar vacío)
+ */
+const getFileUrls = (property: NotionProperty): string[] => {
+  if (property?.type !== 'files') return []
+
+  return property.files.map((file: { type: string; file?: { url: string }; external?: { url: string } }) => {
+    if (file.type === 'file' && file.file) {
       return file.file.url
     }
-    if (file.type === 'external') {
+    if (file.type === 'external' && file.external) {
       return file.external.url
     }
-  }
-  return ''
+    return ''
+  }).filter((url: string) => url !== '')
 }
 
-export const fetchAllBookmarks = async (): Promise<Bookmark[]> => {
-  const bookmarks: Bookmark[] = []
+export const fetchAllBookmarks = async (): Promise<BookmarkWithOriginalImages[]> => {
+  const bookmarks: BookmarkWithOriginalImages[] = []
   let cursor: string | undefined = undefined
 
   do {
@@ -112,7 +117,15 @@ export const fetchAllBookmarks = async (): Promise<Bookmark[]> => {
       if (!('properties' in page)) continue
       const props = page.properties
 
-      const imageUrl = getUrl(props['imageUrlBase']) || getFormula(props['imageUrl']) || getFileUrl(props['image'])
+      // Imágenes originales del campo 'image' (array de files)
+      const originalImages = getFileUrls(props['image'])
+      // URLs cacheadas en S3 (si existen)
+      const imageS3 = getUrl(props['imageS3'])
+      const imageS3Dark = getUrl(props['imageS3Dark'])
+
+      // Prioridad: S3 cacheada > original de Notion
+      const imageUrl = imageS3 || originalImages[0]
+      const imageUrlDark = imageS3Dark || originalImages[1]
 
       bookmarks.push({
         id: page.id,
@@ -123,9 +136,12 @@ export const fetchAllBookmarks = async (): Promise<Bookmark[]> => {
         tags: getMultiSelect(props['Tags']),
         categoryId: getRelation(props['Category']),
         visibleAtStart: getCheckbox(props['Visible at Start']),
-        status: (getSelect(props['Status']) as Bookmark['status']) || 'Not started',
-        valoration: getSelect(props['Valoration']) as Bookmark['valoration'],
+        status: (getSelect(props['Status']) as BookmarkWithOriginalImages['status']) || 'Not started',
+        valoration: getSelect(props['Valoration']) as BookmarkWithOriginalImages['valoration'],
         imageUrl: imageUrl || undefined,
+        imageUrlDark: imageUrlDark || undefined,
+        originalImageUrl: originalImages[0] || undefined,
+        originalImageUrlDark: originalImages[1] || undefined,
         createdTime: getCreatedTime(props['Created time'])
       })
     }
