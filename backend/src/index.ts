@@ -27,7 +27,8 @@ app.get('/api/health', (_req, res) => {
 
 // Servir archivos estáticos del frontend en producción
 if (process.env.NODE_ENV === 'production') {
-  const staticPath = path.join(__dirname, '../../public')
+  // En Docker: __dirname es /app/dist, public está en /app/public
+  const staticPath = path.join(__dirname, '../public')
   app.use(express.static(staticPath))
 
   // SPA fallback - todas las rutas no-API van al index.html
