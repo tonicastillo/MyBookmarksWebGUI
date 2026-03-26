@@ -49,16 +49,28 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
     return bookmarks.value.filter(b => b.visibleAtStart)
   })
 
+  const refreshing = ref(false)
+
   const loadBookmarks = async (forceRefresh = false): Promise<void> => {
-    if (!forceRefresh && isCacheValid(CACHE_KEY)) {
-      const cached = getFromCache<Bookmark[]>(CACHE_KEY)
-      if (cached) {
-        bookmarks.value = cached
+    // Siempre intentar cargar desde caché primero (incluso expirada)
+    const cached = getFromCache<Bookmark[]>(CACHE_KEY)
+    const hasCachedData = cached && cached.length > 0
+
+    if (hasCachedData) {
+      bookmarks.value = cached
+      // Si la caché es válida y no forzamos, no hacemos fetch
+      if (!forceRefresh && isCacheValid(CACHE_KEY)) {
         return
       }
     }
 
-    loading.value = true
+    // Si no hay datos cacheados, mostramos loading completo
+    // Si hay datos cacheados, solo mostramos refreshing (sutil)
+    if (!hasCachedData) {
+      loading.value = true
+    } else {
+      refreshing.value = true
+    }
     error.value = null
 
     try {
@@ -66,10 +78,14 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
       bookmarks.value = data
       saveToCache(CACHE_KEY, data)
     } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Error loading bookmarks'
+      // Solo mostramos error si no teníamos datos cacheados
+      if (!hasCachedData) {
+        error.value = e instanceof Error ? e.message : 'Error loading bookmarks'
+      }
       console.error('Error loading bookmarks:', e)
     } finally {
       loading.value = false
+      refreshing.value = false
     }
   }
 
@@ -126,6 +142,7 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
   return {
     bookmarks,
     loading,
+    refreshing,
     error,
     allTags,
     tagCounts,

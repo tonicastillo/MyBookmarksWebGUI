@@ -21,16 +21,24 @@ export const useCategoriesStore = defineStore('categories', () => {
     return orderedCategories.value.filter(c => !c.padreId)
   })
 
+  const refreshing = ref(false)
+
   const loadCategories = async (forceRefresh = false): Promise<void> => {
-    if (!forceRefresh && isCacheValid(CACHE_KEY)) {
-      const cached = getFromCache<Category[]>(CACHE_KEY)
-      if (cached) {
-        categories.value = cached
+    const cached = getFromCache<Category[]>(CACHE_KEY)
+    const hasCachedData = cached && cached.length > 0
+
+    if (hasCachedData) {
+      categories.value = cached
+      if (!forceRefresh && isCacheValid(CACHE_KEY)) {
         return
       }
     }
 
-    loading.value = true
+    if (!hasCachedData) {
+      loading.value = true
+    } else {
+      refreshing.value = true
+    }
     error.value = null
 
     try {
@@ -38,10 +46,13 @@ export const useCategoriesStore = defineStore('categories', () => {
       categories.value = data
       saveToCache(CACHE_KEY, data)
     } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Error loading categories'
+      if (!hasCachedData) {
+        error.value = e instanceof Error ? e.message : 'Error loading categories'
+      }
       console.error('Error loading categories:', e)
     } finally {
       loading.value = false
+      refreshing.value = false
     }
   }
 
@@ -56,6 +67,7 @@ export const useCategoriesStore = defineStore('categories', () => {
   return {
     categories,
     loading,
+    refreshing,
     error,
     orderedCategories,
     rootCategories,

@@ -13,6 +13,7 @@ export const useBookmarks = () => {
   const categoriesStore = useCategoriesStore()
 
   const isLoading = computed(() => bookmarksStore.loading || categoriesStore.loading)
+  const isRefreshing = computed(() => bookmarksStore.refreshing || categoriesStore.refreshing)
   const hasError = computed(() => bookmarksStore.error || categoriesStore.error)
   const errorMessage = computed(() => bookmarksStore.error || categoriesStore.error)
 
@@ -58,6 +59,7 @@ export const useBookmarks = () => {
 
   return {
     isLoading,
+    isRefreshing,
     hasError,
     errorMessage,
     loadData,

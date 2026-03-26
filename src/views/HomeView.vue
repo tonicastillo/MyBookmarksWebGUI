@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { useBookmarks } from "@/composables/useBookmarks";
 import { useBookmarksStore } from "@/stores/bookmarks";
 import { useSearch } from "@/composables/useSearch";
@@ -15,6 +15,7 @@ import { useCache } from "@/composables/useCache";
 
 const {
   isLoading,
+  isRefreshing,
   hasError,
   errorMessage,
   loadData,
@@ -27,6 +28,8 @@ const { selectedTags, toggleTag, clearTags } = useTags();
 const { getCacheTimestamp } = useCache();
 
 const showTags = ref(false);
+const now = ref(Date.now());
+let tickInterval: ReturnType<typeof setInterval> | null = null;
 
 const isFiltering = computed(() => {
   return debouncedQuery.value.trim() !== "" || selectedTags.value.length > 0;
@@ -44,10 +47,25 @@ const allTags = computed(() => bookmarksStore.allTags);
 const tagCounts = computed(() => bookmarksStore.tagCounts);
 const availableTags = computed(() => bookmarksStore.getAvailableTags(selectedTags.value));
 
-const lastUpdated = computed(() => {
-  const timestamp = getCacheTimestamp("bookmarks");
-  if (!timestamp) return null;
-  return new Date(timestamp).toLocaleString("es-ES");
+const cacheTimestamp = computed(() => getCacheTimestamp("bookmarks"));
+
+const timeAgo = computed(() => {
+  const ts = cacheTimestamp.value;
+  if (!ts) return null;
+
+  const diff = now.value - ts;
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (seconds < 60) return "hace unos segundos";
+  if (minutes === 1) return "hace 1 minuto";
+  if (minutes < 60) return `hace ${minutes} minutos`;
+  if (hours === 1) return "hace 1 hora";
+  if (hours < 24) return `hace ${hours} horas`;
+  if (days === 1) return "hace 1 día";
+  return `hace ${days} días`;
 });
 
 const handleTagClick = (tag: string) => {
@@ -76,17 +94,31 @@ watch(selectedTags, (tags) => {
   }
 });
 
-// watch(categoriesWithBookmarks, (newVal) => {
-//   console.log("categoriesWithBookmarks:", newVal);
-// });
-
 onMounted(() => {
   loadData();
+  // Actualizar el "hace X minutos" cada 30 segundos
+  tickInterval = setInterval(() => {
+    now.value = Date.now();
+  }, 30_000);
+});
+
+onUnmounted(() => {
+  if (tickInterval) clearInterval(tickInterval);
 });
 </script>
 
 <template>
   <div class="space-y-6">
+    <!-- Barra de refresco sutil -->
+    <Transition name="refresh-bar">
+      <div
+        v-if="isRefreshing"
+        class="fixed top-0 left-0 right-0 z-50 h-1 bg-gray-200 overflow-hidden"
+      >
+        <div class="h-full bg-blue-500 animate-progress-bar"></div>
+      </div>
+    </Transition>
+
     <!-- Barra de herramientas -->
     <div class="space-y-4">
       <div class="flex items-center gap-4">
@@ -110,13 +142,15 @@ onMounted(() => {
             {{ selectedTags.length }}
           </span>
         </button>
+        <!-- Botón de recarga: oculto durante carga inicial y refresco -->
         <button
+          v-if="!isLoading && !isRefreshing"
           @click="handleRefresh"
-          class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+          class="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
           title="Actualizar datos"
         >
           <svg
-            class="h-5 w-5"
+            class="h-3.5 w-3.5"
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 20 20"
             fill="currentColor"
@@ -127,6 +161,7 @@ onMounted(() => {
               clip-rule="evenodd"
             />
           </svg>
+          <span v-if="timeAgo">{{ timeAgo }}</span>
         </button>
       </div>
 
@@ -229,12 +264,27 @@ onMounted(() => {
       </template>
     </template>
 
-    <!-- Última actualización -->
-    <p
-      v-if="lastUpdated && !isLoading"
-      class="text-xs text-gray-400 text-center"
-    >
-      Última actualización: {{ lastUpdated }}
-    </p>
   </div>
 </template>
+
+<style scoped>
+@keyframes progress-bar {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(0%); }
+  100% { transform: translateX(100%); }
+}
+
+.animate-progress-bar {
+  animation: progress-bar 1.5s ease-in-out infinite;
+}
+
+.refresh-bar-enter-active,
+.refresh-bar-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.refresh-bar-enter-from,
+.refresh-bar-leave-to {
+  opacity: 0;
+}
+</style>
