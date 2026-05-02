@@ -14,6 +14,7 @@ RUN pnpm install --frozen-lockfile
 
 # Copiar código fuente del frontend
 COPY src/ ./src/
+COPY public/ ./public/
 COPY index.html ./
 COPY vite.config.ts tsconfig.json tsconfig.app.json tsconfig.node.json ./
 COPY postcss.config.js tailwind.config.js ./
