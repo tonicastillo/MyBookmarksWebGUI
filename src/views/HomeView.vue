@@ -47,7 +47,12 @@ const allTags = computed(() => bookmarksStore.allTags);
 const tagCounts = computed(() => bookmarksStore.tagCounts);
 const availableTags = computed(() => bookmarksStore.getAvailableTags(selectedTags.value));
 
-const cacheTimestamp = computed(() => getCacheTimestamp("bookmarks"));
+const cacheTimestamp = computed(() => {
+  // Depender de `now` para reevaluar tras cada tick y tras un refresh
+  // (localStorage no es reactivo por sí mismo).
+  void now.value;
+  return getCacheTimestamp("bookmarks");
+});
 
 const timeAgo = computed(() => {
   const ts = cacheTimestamp.value;
@@ -92,6 +97,10 @@ watch(selectedTags, (tags) => {
   if (tags.length > 0) {
     showTags.value = true;
   }
+});
+
+watch(isRefreshing, (refreshing) => {
+  if (!refreshing) now.value = Date.now();
 });
 
 onMounted(() => {
