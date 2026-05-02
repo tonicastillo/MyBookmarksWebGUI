@@ -12,6 +12,7 @@ const CATEGORIES_DB_ID = process.env.NOTION_CATEGORIES_DB_ID!
 type NotionProperty = any
 
 const getTextContent = (property: NotionProperty): string => {
+  if (!property) return ''
   if (property.type === 'title' && property.title.length > 0) {
     return property.title[0].plain_text
   }
@@ -22,6 +23,7 @@ const getTextContent = (property: NotionProperty): string => {
 }
 
 const getUrl = (property: NotionProperty): string => {
+  if (!property) return ''
   if (property.type === 'url' && property.url) {
     return property.url
   }
@@ -29,6 +31,7 @@ const getUrl = (property: NotionProperty): string => {
 }
 
 const getMultiSelect = (property: NotionProperty): string[] => {
+  if (!property) return []
   if (property.type === 'multi_select') {
     return property.multi_select.map((item: { name: string }) => item.name)
   }
@@ -36,6 +39,7 @@ const getMultiSelect = (property: NotionProperty): string[] => {
 }
 
 const getSelect = (property: NotionProperty): string | undefined => {
+  if (!property) return undefined
   if (property.type === 'select' && property.select) {
     return property.select.name
   }
@@ -43,6 +47,7 @@ const getSelect = (property: NotionProperty): string | undefined => {
 }
 
 const getCheckbox = (property: NotionProperty): boolean => {
+  if (!property) return false
   if (property.type === 'checkbox') {
     return property.checkbox
   }
@@ -50,13 +55,23 @@ const getCheckbox = (property: NotionProperty): boolean => {
 }
 
 const getNumber = (property: NotionProperty): number => {
-  if (property.type === 'number' && property.number !== null) {
+  if (!property) return 0
+  if (property.type === 'number' && property.number !== null && property.number !== undefined) {
     return property.number
   }
   return 0
 }
 
+const getOptionalNumber = (property: NotionProperty): number | undefined => {
+  if (!property) return undefined
+  if (property.type === 'number' && property.number !== null && property.number !== undefined) {
+    return property.number
+  }
+  return undefined
+}
+
 const getRelation = (property: NotionProperty): string | undefined => {
+  if (!property) return undefined
   if (property.type === 'relation' && property.relation.length > 0) {
     return property.relation[0].id
   }
@@ -64,6 +79,7 @@ const getRelation = (property: NotionProperty): string | undefined => {
 }
 
 const getRelationIds = (property: NotionProperty): string[] => {
+  if (!property) return []
   if (property.type === 'relation') {
     return property.relation.map((r: { id: string }) => r.id)
   }
@@ -71,6 +87,7 @@ const getRelationIds = (property: NotionProperty): string[] => {
 }
 
 const getCreatedTime = (property: NotionProperty): string => {
+  if (!property) return ''
   if (property.type === 'created_time') {
     return property.created_time
   }
@@ -78,6 +95,7 @@ const getCreatedTime = (property: NotionProperty): string => {
 }
 
 const getFormula = (property: NotionProperty): string => {
+  if (!property) return ''
   if (property.type === 'formula' && property.formula.type === 'string' && property.formula.string) {
     return property.formula.string
   }
@@ -127,6 +145,16 @@ export const fetchAllBookmarks = async (): Promise<BookmarkWithOriginalImages[]>
       const imageUrl = imageS3 || originalImages[0]
       const imageUrlDark = imageS3Dark || originalImages[1]
 
+      // Campos opcionales para mega cards y site-search.
+      // Si los campos no existen en Notion aún, las helpers devuelven undefined y la app sigue funcionando.
+      const parentBookmarkId = getRelation(props['parentBookmark'])
+      const colorHueRaw = getOptionalNumber(props['ColorHue'])
+      const colorHue = typeof colorHueRaw === 'number'
+        ? Math.max(0, Math.min(360, colorHueRaw))
+        : undefined
+      const searchPlaceholder = getTextContent(props['SearchPlaceholder']) || undefined
+      const searchUrlTemplate = (getUrl(props['searchUrlTemplate']) || getTextContent(props['searchUrlTemplate'])) || undefined
+
       bookmarks.push({
         id: page.id,
         name: getTextContent(props['Name']),
@@ -142,7 +170,11 @@ export const fetchAllBookmarks = async (): Promise<BookmarkWithOriginalImages[]>
         imageUrlDark: imageUrlDark || undefined,
         originalImageUrl: originalImages[0] || undefined,
         originalImageUrlDark: originalImages[1] || undefined,
-        createdTime: getCreatedTime(props['Created time'])
+        createdTime: getCreatedTime(props['Created time']),
+        parentBookmarkId,
+        colorHue,
+        searchPlaceholder,
+        searchUrlTemplate
       })
     }
 

@@ -51,8 +51,22 @@ interface Bookmark {
   imageUrl?: string;               // imageUrlBase (url) o imageUrl (formula)
   image?: string;                  // image (file)
   createdTime: string;             // Created time
+
+  // — Mega cards & site-search (campos opcionales) —
+  parentBookmarkId?: string;       // parentBookmark (relation → self): si está, este bookmark es hijo de otro
+  colorHue?: number;               // ColorHue (number 0–360): override del color de acento (si vacío, se deriva de la categoría)
+  searchPlaceholder?: string;      // SearchPlaceholder (text): placeholder del input de búsqueda en la card
+  searchUrlTemplate?: string;      // searchUrlTemplate (url): plantilla con {q}, ej. "https://store.steampowered.com/search/?term={q}"
 }
 ```
+
+#### Cómo crear una mega card en Notion
+1. Crea un bookmark "padre" (ej. `Game stores`) con la imagen y subtítulo del grupo. **Deja el campo URL vacío**: la card del padre no es navegable.
+2. Marca el padre como `Visible at Start = true` para que aparezca en la home.
+3. En cada bookmark hijo (Steam, Epic, GOG…), rellena `parentBookmark` con la relación al padre. Los hijos heredan visibilidad del padre, así que su propio `Visible at Start` se ignora cuando van dentro de la mega card.
+4. (Opcional) Si quieres un campo de búsqueda dentro de la card (padre o hijo), rellena `SearchPlaceholder` y `searchUrlTemplate` (con `{q}` donde va la query).
+
+> ⚠️ Los nombres de las propiedades en Notion son **case-sensitive**. Si renombras alguna, hay que actualizar el mapping en `backend/src/services/notion.ts`.
 
 **Tags disponibles**: IoT, Outside, Pirat, Torrent, iOS, Mac, Films, Shows, Music, Books, French, Comics, NAS, MacBookServer, 🎶 Media, Appartament, 🛠️ Tools, Freelance, Develop, Analisis, Sandboxes, Design, Documentation, HomeAssistant, CSS, Hosting, Stock, Textures, Video, VideoConf, 3dPrinting, 3dTools, Shopping, Servers, Gaming, AI, Email, People, Emulators, Translator, Learning, Arduino, Electronic, 3d, HTML, ReactJs, ReactNative, Córdoba, Git, kids, Icons, Images, Social, iot, DevTools, DesignTools, Personal, CommandLine, App, SystemTool, three.js, YouTube, Color, DevDocs, svg, RetroGaming, UseLess, Funny, Testing, home, inspiration, Shaders, DIY, crafts, CloudService, maps, AI Image Generation, MarkDown, PDF, art, music, photos, search, UI, Tools, Typography, roms, ChromeExtension, AI Video Generation, scrapping, player, VisualStudioCodeExtension, mockups, Emule, Tonterías, opensource, npm, canvas, webgl, MCP, VueJS
 

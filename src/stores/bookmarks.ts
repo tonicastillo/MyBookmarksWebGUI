@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import type { Bookmark } from '@/types'
 import { fetchBookmarks } from '@/api/notion'
 import { useCache } from '@/composables/useCache'
+import { groupBookmarksByParent, type BookmarkGroup } from '@/composables/useBookmarkGroups'
 
 const CACHE_KEY = 'bookmarks'
 
@@ -97,6 +98,46 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
     return bookmarks.value.filter(b => b.categoryId === categoryId && b.visibleAtStart)
   }
 
+  /**
+   * Devuelve los grupos (mega cards + sueltos) visibles al inicio para una categoría.
+   * - El "lead" del grupo es el bookmark visible (padre o suelto).
+   * - Los hijos se añaden desde el set completo de bookmarks, ignorando su propio
+   *   `visibleAtStart` (un padre visible muestra siempre toda su familia).
+   */
+  const getVisibleGroupsByCategory = (categoryId: string): BookmarkGroup[] => {
+    const allGroups = groupBookmarksByParent(bookmarks.value)
+    return allGroups
+      .filter(g => g.bookmark.categoryId === categoryId && g.bookmark.visibleAtStart)
+  }
+
+  /**
+   * Aplica búsqueda y filtros por tags devolviendo grupos.
+   * Un grupo coincide si el padre o cualquier hijo coincide con la query/tags.
+   * Los hijos del grupo se mantienen completos (no se podan por la consulta).
+   */
+  const searchAndFilterGroups = (query: string, tags: string[]): BookmarkGroup[] => {
+    const q = query.toLowerCase().trim()
+    const allGroups = groupBookmarksByParent(bookmarks.value)
+
+    const matchesQuery = (b: Bookmark): boolean => {
+      if (!q) return true
+      const nameMatch = b.name.toLowerCase().includes(q)
+      const subtitleMatch = !!b.subtitle?.toLowerCase().includes(q)
+      const tagsMatch = b.tags.some(t => t.toLowerCase().includes(q))
+      return nameMatch || subtitleMatch || tagsMatch
+    }
+
+    const matchesTags = (b: Bookmark): boolean => {
+      if (tags.length === 0) return true
+      return tags.every(tag => b.tags.includes(tag))
+    }
+
+    return allGroups.filter(g => {
+      const all = [g.bookmark, ...g.children]
+      return all.some(b => matchesQuery(b) && matchesTags(b))
+    })
+  }
+
   const search = (query: string): Bookmark[] => {
     const q = query.toLowerCase().trim()
     if (!q) return []
@@ -151,6 +192,8 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
     loadBookmarks,
     getByCategory,
     getVisibleByCategory,
+    getVisibleGroupsByCategory,
+    searchAndFilterGroups,
     search,
     filterByTags,
     searchAndFilter

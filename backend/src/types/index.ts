@@ -12,6 +12,10 @@ export interface Bookmark {
   imageUrl?: string
   imageUrlDark?: string
   createdTime: string
+  parentBookmarkId?: string
+  colorHue?: number
+  searchPlaceholder?: string
+  searchUrlTemplate?: string
 }
 
 /**

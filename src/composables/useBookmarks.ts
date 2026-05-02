@@ -1,11 +1,12 @@
 import { computed } from 'vue'
 import { useBookmarksStore } from '@/stores/bookmarks'
 import { useCategoriesStore } from '@/stores/categories'
-import type { Bookmark, Category } from '@/types'
+import type { Category } from '@/types'
+import type { BookmarkGroup } from '@/composables/useBookmarkGroups'
 
-export interface CategoryWithBookmarks {
+export interface CategoryWithGroups {
   category: Category
-  bookmarks: Bookmark[]
+  groups: BookmarkGroup[]
 }
 
 export const useBookmarks = () => {
@@ -24,37 +25,19 @@ export const useBookmarks = () => {
     ])
   }
 
-  const getCategoriesWithVisibleBookmarks = (): CategoryWithBookmarks[] => {
+  /** Modo inicial: agrupado por categoría con mega cards y sueltos. */
+  const getCategoriesWithVisibleGroups = (): CategoryWithGroups[] => {
     return categoriesStore.orderedCategories
       .map(category => ({
         category,
-        bookmarks: bookmarksStore.getVisibleByCategory(category.id)
+        groups: bookmarksStore.getVisibleGroupsByCategory(category.id)
       }))
-      .filter(item => item.bookmarks.length > 0)
+      .filter(item => item.groups.length > 0)
   }
 
-  const getFilteredBookmarks = (query: string, tags: string[]): Bookmark[] => {
-    return bookmarksStore.searchAndFilter(query, tags)
-  }
-
-  const getCategoriesWithFilteredBookmarks = (query: string, tags: string[]): CategoryWithBookmarks[] => {
-    const filtered = getFilteredBookmarks(query, tags)
-    const categoryMap = new Map<string, Bookmark[]>()
-
-    filtered.forEach(bookmark => {
-      const catId = bookmark.categoryId || 'uncategorized'
-      if (!categoryMap.has(catId)) {
-        categoryMap.set(catId, [])
-      }
-      categoryMap.get(catId)!.push(bookmark)
-    })
-
-    return categoriesStore.orderedCategories
-      .map(category => ({
-        category,
-        bookmarks: categoryMap.get(category.id) || []
-      }))
-      .filter(item => item.bookmarks.length > 0)
+  /** Modo filtrado: lista plana de grupos (mega cards + sueltos). */
+  const getFilteredGroups = (query: string, tags: string[]): BookmarkGroup[] => {
+    return bookmarksStore.searchAndFilterGroups(query, tags)
   }
 
   return {
@@ -63,8 +46,7 @@ export const useBookmarks = () => {
     hasError,
     errorMessage,
     loadData,
-    getCategoriesWithVisibleBookmarks,
-    getFilteredBookmarks,
-    getCategoriesWithFilteredBookmarks
+    getCategoriesWithVisibleGroups,
+    getFilteredGroups
   }
 }

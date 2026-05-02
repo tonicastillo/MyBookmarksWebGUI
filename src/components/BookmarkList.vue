@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import type { Bookmark } from '@/types'
+import type { BookmarkGroup } from '@/composables/useBookmarkGroups'
 import BookmarkCard from './BookmarkCard.vue'
+import MegaCard from './MegaCard.vue'
 
-defineProps<{
-  bookmarks: Bookmark[]
+const props = defineProps<{
+  groups: BookmarkGroup[]
 }>()
 
 const emit = defineEmits<{
@@ -13,21 +14,38 @@ const emit = defineEmits<{
 const handleTagClick = (tag: string) => {
   emit('tag-click', tag)
 }
+
+const totalCount = () => props.groups.reduce((acc, g) => acc + 1 + g.children.length, 0)
 </script>
 
 <template>
   <div class="space-y-4">
     <p class="text-sm text-gray-500">
-      {{ bookmarks.length }} resultado{{ bookmarks.length !== 1 ? 's' : '' }}
+      {{ totalCount() }} resultado{{ totalCount() !== 1 ? 's' : '' }}
     </p>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      <BookmarkCard
-        v-for="bookmark in bookmarks"
-        :key="bookmark.id"
-        :bookmark="bookmark"
-        @tag-click="handleTagClick"
-      />
+    <div class="cards">
+      <template v-for="g in groups" :key="g.bookmark.id">
+        <MegaCard
+          v-if="g.children.length > 0"
+          :parent="g.bookmark"
+          :children="g.children"
+          @tag-click="handleTagClick"
+        />
+        <BookmarkCard
+          v-else
+          :bookmark="g.bookmark"
+          @tag-click="handleTagClick"
+        />
+      </template>
     </div>
   </div>
 </template>
+
+<style scoped>
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+</style>

@@ -19,8 +19,8 @@ const {
   hasError,
   errorMessage,
   loadData,
-  getCategoriesWithVisibleBookmarks,
-  getFilteredBookmarks,
+  getCategoriesWithVisibleGroups,
+  getFilteredGroups,
 } = useBookmarks();
 const bookmarksStore = useBookmarksStore();
 const { searchQuery, debouncedQuery, clearSearch } = useSearch();
@@ -35,12 +35,12 @@ const isFiltering = computed(() => {
   return debouncedQuery.value.trim() !== "" || selectedTags.value.length > 0;
 });
 
-const categoriesWithBookmarks = computed(() => {
-  return getCategoriesWithVisibleBookmarks();
+const categoriesWithGroups = computed(() => {
+  return getCategoriesWithVisibleGroups();
 });
 
-const filteredBookmarks = computed(() => {
-  return getFilteredBookmarks(debouncedQuery.value, selectedTags.value);
+const filteredGroups = computed(() => {
+  return getFilteredGroups(debouncedQuery.value, selectedTags.value);
 });
 
 const allTags = computed(() => bookmarksStore.allTags);
@@ -230,13 +230,13 @@ onUnmounted(() => {
       <!-- Modo filtrado: lista plana -->
       <template v-if="isFiltering">
         <EmptyState
-          v-if="filteredBookmarks.length === 0"
+          v-if="filteredGroups.length === 0"
           title="Sin resultados"
           description="No se encontraron bookmarks con los filtros actuales."
         />
         <BookmarkList
           v-else
-          :bookmarks="filteredBookmarks"
+          :groups="filteredGroups"
           @tag-click="handleTagClick"
         />
       </template>
@@ -244,7 +244,7 @@ onUnmounted(() => {
       <!-- Modo inicial: agrupado por categorías -->
       <template v-else>
         <EmptyState
-          v-if="categoriesWithBookmarks.length === 0"
+          v-if="categoriesWithGroups.length === 0"
           title="Sin bookmarks"
           description="No hay bookmarks marcados como visibles al inicio."
         />
@@ -252,21 +252,21 @@ onUnmounted(() => {
           <!-- Accesos rápidos a categorías -->
           <nav class="text-sm text-gray-600">
             <span class="font-medium text-gray-700">Ir a: </span>
-            <template v-for="({ category }, index) in categoriesWithBookmarks" :key="category.id">
+            <template v-for="({ category }, index) in categoriesWithGroups" :key="category.id">
               <a
                 :href="`#category-${category.id}`"
                 class="text-blue-600 hover:text-blue-800 hover:underline"
               >{{ category.name }}</a>
-              <span v-if="index < categoriesWithBookmarks.length - 1" class="mx-1">·</span>
+              <span v-if="index < categoriesWithGroups.length - 1" class="mx-1">·</span>
             </template>
           </nav>
 
           <CategorySection
-            v-for="{ category, bookmarks } in categoriesWithBookmarks"
+            v-for="{ category, groups } in categoriesWithGroups"
             :key="category.id"
             :id="`category-${category.id}`"
             :category="category"
-            :bookmarks="bookmarks"
+            :groups="groups"
             @tag-click="handleTagClick"
           />
         </div>
