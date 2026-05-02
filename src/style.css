@@ -2,6 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-gray-50 text-gray-900 antialiased;
+:root {
+  --bg: #faf9f7;
+  --bg-elev: #ffffff;
+  --bg-soft: #f3f1ec;
+  --bg-softer: #ecebe5;
+  --fg: #1c1a14;
+  --fg-mid: #4a463c;
+  --fg-soft: #7a7468;
+  --fg-faint: #a8a294;
+  --border: rgba(28, 26, 20, 0.08);
+  --border-strong: rgba(28, 26, 20, 0.16);
+  --shadow-md: 0 1px 3px rgba(28, 26, 20, 0.06), 0 8px 24px rgba(28, 26, 20, 0.05);
+}
+
+html, body {
+  background: var(--bg);
+  color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', system-ui, sans-serif;
 }

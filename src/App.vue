@@ -1,16 +1,36 @@
 <script setup lang="ts">
 import { RouterView } from 'vue-router'
+import Sidebar from '@/components/Sidebar.vue'
 </script>
 
 <template>
-  <div class="min-h-screen">
-    <header class="bg-white shadow-sm border-b border-gray-200">
-      <div class="max-w-7xl mx-auto px-4 py-4">
-        <h1 class="text-2xl font-bold text-gray-900">MyBookmarks</h1>
+  <div class="app-shell">
+    <Sidebar />
+    <main class="main">
+      <div class="main-inner">
+        <RouterView />
       </div>
-    </header>
-    <main class="max-w-7xl mx-auto px-4 py-6">
-      <RouterView />
     </main>
   </div>
 </template>
+
+<style scoped>
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+  background: var(--bg, #faf9f7);
+}
+.main {
+  flex: 1;
+  min-width: 0;
+}
+.main-inner {
+  max-width: 1180px;
+  padding: 22px 28px 64px;
+}
+@media (max-width: 768px) {
+  .main-inner {
+    padding: 16px;
+  }
+}
+</style>

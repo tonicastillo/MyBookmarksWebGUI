@@ -19,7 +19,7 @@ const handleTagClick = (tag: string) => {
 </script>
 
 <template>
-  <section class="cat-section">
+  <section class="cat-section" :data-category-id="category.id">
     <header class="cat-header">
       <h2>{{ category.name }}</h2>
       <span class="count">{{ groups.length }}</span>
