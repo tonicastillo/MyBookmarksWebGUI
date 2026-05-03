@@ -18,8 +18,8 @@ services:
       - SQLITE_WEB_PASSWORD=${SQLITE_WEB_PASSWORD:?set SQLITE_WEB_PASSWORD in .env}
     volumes:
       - bookmarks-data:/data:ro
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
     restart: unless-stopped
     depends_on:
       - app
