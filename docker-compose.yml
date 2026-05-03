@@ -3,12 +3,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "3003:3003"
     environment:
       - NODE_ENV=production
       - PORT=3003
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-}
     volumes:
-      - ./data:/app/data
+      - bookmarks-data:/app/data
     restart: unless-stopped
+
+volumes:
+  bookmarks-data:
