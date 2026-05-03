@@ -11,5 +11,18 @@ services:
       - bookmarks-data:/app/data
     restart: unless-stopped
 
+  sqlite-web:
+    image: coleifer/sqlite-web:latest
+    command: sqlite_web -H 0.0.0.0 -p 8080 -x --password /data/bookmarks.db
+    environment:
+      - SQLITE_WEB_PASSWORD=${SQLITE_WEB_PASSWORD:?set SQLITE_WEB_PASSWORD in .env}
+    volumes:
+      - bookmarks-data:/data:ro
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    depends_on:
+      - app
+
 volumes:
   bookmarks-data:

@@ -2,6 +2,8 @@
 
 Aplicación web para gestionar y visualizar bookmarks almacenados en Notion.
 
+> **Producción**: la aplicación se hospeda en [Dokploy](https://dokploy.com/), desplegada vía Docker desde este repositorio.
+
 ## Características
 
 - Visualización de bookmarks agrupados por categorías
@@ -93,7 +95,9 @@ docker compose up --build
 
 La aplicación estará disponible en http://localhost:3003
 
-### Despliegue en Dokploy
+### Despliegue en Dokploy (entorno de producción)
+
+El proyecto **se hospeda en producción en Dokploy**. Pasos para reproducir el despliegue:
 
 1. Sube el repositorio a GitHub/GitLab
 2. En Dokploy, crea una nueva aplicación y conecta el repositorio
@@ -102,6 +106,7 @@ La aplicación estará disponible en http://localhost:3003
    - `NOTION_BOOKMARKS_DB_ID`
    - `NOTION_CATEGORIES_DB_ID`
 4. Dokploy detectará el Dockerfile automáticamente
+5. Monta un volumen persistente para `backend/data/` (SQLite + imágenes), tal como define `docker-compose.yml` con `bookmarks-data`
 
 ## Estructura del proyecto
 
