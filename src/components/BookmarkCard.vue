@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import type { Bookmark } from '@/types'
 import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { resolveBookmarkHue } from '@/composables/useColorHue'
+
+const router = useRouter()
 
 const props = defineProps<{
   bookmark: Bookmark
@@ -18,11 +21,6 @@ const hasUrl = computed(() => Boolean(props.bookmark.url))
 const hasSearch = computed(() =>
   Boolean(props.bookmark.searchUrlTemplate)
 )
-
-const notionUrl = computed(() => {
-  const cleanId = props.bookmark.id.replace(/-/g, '')
-  return `https://www.notion.so/${cleanId}`
-})
 
 const displayUrl = computed(() => {
   if (!props.bookmark.url) return ''
@@ -53,7 +51,7 @@ const handleTagClick = (tag: string, event: Event) => {
 const handleEditClick = (event: Event) => {
   event.preventDefault()
   event.stopPropagation()
-  window.open(notionUrl.value, '_blank', 'noopener,noreferrer')
+  router.push(`/edit/${props.bookmark.id}`)
 }
 
 const searchQuery = ref('')
@@ -144,7 +142,7 @@ const cardTag = computed(() => (hasUrl.value ? 'a' : 'div'))
 
     <button
       class="card-edit"
-      aria-label="Editar en Notion"
+      aria-label="Editar"
       @click="handleEditClick"
     >
       <svg

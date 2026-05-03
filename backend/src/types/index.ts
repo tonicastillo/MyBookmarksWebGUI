@@ -8,22 +8,13 @@ export interface Bookmark {
   categoryId?: string
   visibleAtStart: boolean
   status: 'Not started' | 'In progress' | 'Done'
-  valoration?: '⭐' | '⭐⭐' | '⭐⭐⭐' | '⭐⭐⭐⭐' | '⭐⭐⭐⭐⭐'
+  valoration?: string
   imageUrl?: string
-  imageUrlDark?: string
   createdTime: string
   parentBookmarkId?: string
   colorHue?: number
   searchPlaceholder?: string
   searchUrlTemplate?: string
-}
-
-/**
- * Bookmark con URLs originales de Notion (para sincronización S3)
- */
-export interface BookmarkWithOriginalImages extends Bookmark {
-  originalImageUrl?: string
-  originalImageUrlDark?: string
 }
 
 export interface Category {

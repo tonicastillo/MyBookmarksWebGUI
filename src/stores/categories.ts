@@ -1,7 +1,13 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { Category } from '@/types'
-import { fetchCategories } from '@/api/notion'
+import {
+  fetchCategories,
+  createCategory as apiCreateCategory,
+  updateCategory as apiUpdateCategory,
+  deleteCategoryById as apiDeleteCategory,
+  type CategoryInput
+} from '@/api/notion'
 import { useCache } from '@/composables/useCache'
 
 const CACHE_KEY = 'categories'
@@ -11,7 +17,7 @@ export const useCategoriesStore = defineStore('categories', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  const { saveToCache, getFromCache, isCacheValid } = useCache()
+  const { saveToCache, getFromCache, isCacheValid, clearCache } = useCache()
 
   const orderedCategories = computed(() => {
     return [...categories.value].sort((a, b) => a.order - b.order)
@@ -64,6 +70,39 @@ export const useCategoriesStore = defineStore('categories', () => {
     return orderedCategories.value.filter(c => c.padreId === parentId)
   }
 
+  const upsertLocal = (category: Category): void => {
+    const idx = categories.value.findIndex(c => c.id === category.id)
+    if (idx >= 0) categories.value.splice(idx, 1, category)
+    else categories.value.push(category)
+    saveToCache(CACHE_KEY, categories.value)
+  }
+
+  const removeLocal = (id: string): void => {
+    categories.value = categories.value.filter(c => c.id !== id)
+    saveToCache(CACHE_KEY, categories.value)
+  }
+
+  const create = async (input: CategoryInput): Promise<Category> => {
+    const created = await apiCreateCategory(input)
+    upsertLocal(created)
+    return created
+  }
+
+  const update = async (id: string, input: Partial<CategoryInput>): Promise<Category> => {
+    const updated = await apiUpdateCategory(id, input)
+    upsertLocal(updated)
+    return updated
+  }
+
+  const remove = async (id: string): Promise<void> => {
+    await apiDeleteCategory(id)
+    removeLocal(id)
+  }
+
+  const invalidate = (): void => {
+    clearCache(CACHE_KEY)
+  }
+
   return {
     categories,
     loading,
@@ -73,6 +112,10 @@ export const useCategoriesStore = defineStore('categories', () => {
     rootCategories,
     loadCategories,
     getById,
-    getChildren
+    getChildren,
+    create,
+    update,
+    remove,
+    invalidate
   }
 })

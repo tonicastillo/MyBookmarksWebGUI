@@ -5,22 +5,27 @@ import { fileURLToPath } from 'url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-// IMPORTANTE: Cargar .env ANTES de cualquier otro import que use process.env
-dotenv.config({ path: path.join(__dirname, '../../.env') })
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config({ path: path.join(__dirname, '../../.env') })
+}
 
-// Imports dinámicos para asegurar que process.env ya está cargado
 const startServer = async () => {
   const express = (await import('express')).default
   const cors = (await import('cors')).default
+  const { runMigrations } = await import('./db/migrate.js')
+  const { IMAGES_DIR } = await import('./db/connection.js')
   const { default: bookmarksRouter } = await import('./routes/bookmarks.js')
   const { default: categoriesRouter } = await import('./routes/categories.js')
+
+  runMigrations()
 
   const app = express()
   const PORT = process.env.PORT || 3003
 
   app.use(cors())
-  app.use(express.json())
+  app.use(express.json({ limit: '5mb' }))
 
+  app.use('/images', express.static(IMAGES_DIR, { maxAge: '7d' }))
   app.use('/api/bookmarks', bookmarksRouter)
   app.use('/api/categories', categoriesRouter)
 
@@ -28,13 +33,9 @@ const startServer = async () => {
     res.json({ status: 'ok' })
   })
 
-  // Servir archivos estáticos del frontend en producción
   if (process.env.NODE_ENV === 'production') {
-    // En Docker: __dirname es /app/dist, public está en /app/public
     const staticPath = path.join(__dirname, '../public')
     app.use(express.static(staticPath))
-
-    // SPA fallback - todas las rutas no-API van al index.html
     app.get('*', (_req, res) => {
       res.sendFile(path.join(staticPath, 'index.html'))
     })

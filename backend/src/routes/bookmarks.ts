@@ -1,126 +1,161 @@
 import { Router, type Router as IRouter } from 'express'
-import { fetchAllBookmarks } from '../services/notion.js'
-import { syncImageToS3, isOurS3Url } from '../services/s3.js'
-import { updateBookmarkImageS3Batch, type ImageS3Update } from '../services/notionUpdate.js'
-import type { ApiResponse, Bookmark, BookmarkWithOriginalImages } from '../types/index.js'
+import multer from 'multer'
+import path from 'path'
+import fs from 'fs'
+import { nanoid } from 'nanoid'
+import { IMAGES_DIR } from '../db/connection.js'
+import {
+  getAllBookmarks,
+  getBookmarkById,
+  insertBookmark,
+  updateBookmark,
+  deleteBookmark,
+  updateImageFilename,
+  getImageFilename,
+  getAllTags,
+  type BookmarkInput
+} from '../db/queries/bookmarks.js'
+import type { ApiResponse, Bookmark } from '../types/index.js'
 
 const router: IRouter = Router()
 
-// Cola de actualizaciones pendientes para Notion
-const notionUpdateQueue: ImageS3Update[] = []
-let isProcessingQueue = false
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }
+})
 
-/**
- * Procesa la cola de actualizaciones de Notion en background
- */
-const processNotionUpdateQueue = async () => {
-  if (isProcessingQueue || notionUpdateQueue.length === 0) return
-
-  isProcessingQueue = true
-
-  const updates = [...notionUpdateQueue]
-  notionUpdateQueue.length = 0
-
-  console.log(`[Queue] Processing ${updates.length} Notion updates...`)
-
-  const result = await updateBookmarkImageS3Batch(updates)
-  console.log(`[Queue] Completed: ${result.success} success, ${result.failed} failed`)
-
-  isProcessingQueue = false
-
-  // Si hay más updates en la cola, procesar
-  if (notionUpdateQueue.length > 0) {
-    processNotionUpdateQueue().catch(console.error)
-  }
+const ALLOWED_MIME: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/webp': 'webp',
+  'image/svg+xml': 'svg',
+  'image/gif': 'gif',
+  'image/avif': 'avif'
 }
 
-/**
- * Sincroniza imágenes de bookmarks a S3 en paralelo
- * Maneja tanto imagen clara como oscura
- */
-const syncBookmarkImages = async (bookmarks: BookmarkWithOriginalImages[]): Promise<void> => {
-  const CONCURRENCY = 5
-
-  // Filtrar bookmarks que tienen imágenes originales por sincronizar
-  const bookmarksToSync = bookmarks.filter(b =>
-    (b.originalImageUrl && !isOurS3Url(b.imageUrl || '')) ||
-    (b.originalImageUrlDark && !isOurS3Url(b.imageUrlDark || ''))
-  )
-
-  if (bookmarksToSync.length === 0) {
-    return
-  }
-
-  console.log(`[Sync] Syncing images for ${bookmarksToSync.length} bookmarks to S3...`)
-
-  for (let i = 0; i < bookmarksToSync.length; i += CONCURRENCY) {
-    const batch = bookmarksToSync.slice(i, i + CONCURRENCY)
-
-    await Promise.all(batch.map(async (bookmark) => {
-      const update: ImageS3Update = { pageId: bookmark.id }
-      let hasChanges = false
-
-      // Sincronizar imagen clara
-      if (bookmark.originalImageUrl && !isOurS3Url(bookmark.imageUrl || '')) {
-        const s3Url = await syncImageToS3(bookmark.id, bookmark.originalImageUrl)
-        if (s3Url) {
-          bookmark.imageUrl = s3Url
-          update.imageS3 = s3Url
-          hasChanges = true
-        }
-      }
-
-      // Sincronizar imagen oscura
-      if (bookmark.originalImageUrlDark && !isOurS3Url(bookmark.imageUrlDark || '')) {
-        const s3UrlDark = await syncImageToS3(bookmark.id, bookmark.originalImageUrlDark)
-        if (s3UrlDark) {
-          bookmark.imageUrlDark = s3UrlDark
-          update.imageS3Dark = s3UrlDark
-          hasChanges = true
-        }
-      }
-
-      if (hasChanges) {
-        notionUpdateQueue.push(update)
-      }
-    }))
-  }
+const sendError = (res: Parameters<Parameters<typeof router.get>[1]>[1], status: number, message: string) => {
+  const response: ApiResponse<null> = { success: false, data: null, error: message }
+  res.status(status).json(response)
 }
 
-/**
- * Elimina las propiedades internas antes de enviar al cliente
- */
-const sanitizeBookmarks = (bookmarks: BookmarkWithOriginalImages[]): Bookmark[] => {
-  return bookmarks.map(({ originalImageUrl, originalImageUrlDark, ...bookmark }) => bookmark)
-}
-
-router.get('/', async (req, res) => {
+router.get('/', (_req, res) => {
   try {
-    const syncImages = req.query.syncImages !== 'false'
-    const bookmarks = await fetchAllBookmarks()
-
-    if (syncImages) {
-      await syncBookmarkImages(bookmarks)
-
-      // Procesar actualizaciones de Notion en background
-      if (notionUpdateQueue.length > 0) {
-        processNotionUpdateQueue().catch(console.error)
-      }
-    }
-
-    const response: ApiResponse<Bookmark[]> = {
-      success: true,
-      data: sanitizeBookmarks(bookmarks)
-    }
+    const bookmarks = getAllBookmarks()
+    const response: ApiResponse<Bookmark[]> = { success: true, data: bookmarks }
     res.json(response)
-  } catch (error) {
-    console.error('Error fetching bookmarks:', error)
-    const response: ApiResponse<null> = {
-      success: false,
-      data: null,
-      error: error instanceof Error ? error.message : 'Unknown error'
+  } catch (err) {
+    console.error(err)
+    sendError(res, 500, err instanceof Error ? err.message : 'Unknown error')
+  }
+})
+
+router.get('/tags', (_req, res) => {
+  try {
+    const response: ApiResponse<string[]> = { success: true, data: getAllTags() }
+    res.json(response)
+  } catch (err) {
+    console.error(err)
+    sendError(res, 500, err instanceof Error ? err.message : 'Unknown error')
+  }
+})
+
+router.get('/:id', (req, res) => {
+  const bookmark = getBookmarkById(req.params.id)
+  if (!bookmark) return sendError(res, 404, 'Bookmark no encontrado')
+  const response: ApiResponse<Bookmark> = { success: true, data: bookmark }
+  res.json(response)
+})
+
+router.post('/', (req, res) => {
+  try {
+    const input = req.body as BookmarkInput
+    if (!input?.name || typeof input.name !== 'string') {
+      return sendError(res, 400, 'name es obligatorio')
     }
-    res.status(500).json(response)
+    const id = nanoid()
+    const bookmark = insertBookmark(id, input)
+    const response: ApiResponse<Bookmark> = { success: true, data: bookmark }
+    res.status(201).json(response)
+  } catch (err) {
+    console.error(err)
+    sendError(res, 500, err instanceof Error ? err.message : 'Unknown error')
+  }
+})
+
+router.put('/:id', (req, res) => {
+  try {
+    const bookmark = updateBookmark(req.params.id, req.body as Partial<BookmarkInput>)
+    if (!bookmark) return sendError(res, 404, 'Bookmark no encontrado')
+    const response: ApiResponse<Bookmark> = { success: true, data: bookmark }
+    res.json(response)
+  } catch (err) {
+    console.error(err)
+    sendError(res, 500, err instanceof Error ? err.message : 'Unknown error')
+  }
+})
+
+router.delete('/:id', (req, res) => {
+  try {
+    const filename = getImageFilename(req.params.id)
+    const ok = deleteBookmark(req.params.id)
+    if (!ok) return sendError(res, 404, 'Bookmark no encontrado')
+    if (filename) {
+      const filepath = path.join(IMAGES_DIR, filename)
+      if (fs.existsSync(filepath)) fs.unlinkSync(filepath)
+    }
+    const response: ApiResponse<{ id: string }> = { success: true, data: { id: req.params.id } }
+    res.json(response)
+  } catch (err) {
+    console.error(err)
+    sendError(res, 500, err instanceof Error ? err.message : 'Unknown error')
+  }
+})
+
+router.post('/:id/image', upload.single('image'), (req, res) => {
+  try {
+    if (!req.file) return sendError(res, 400, 'No se ha subido ningún archivo')
+
+    const ext = ALLOWED_MIME[req.file.mimetype]
+    if (!ext) return sendError(res, 400, `Mime no soportado: ${req.file.mimetype}`)
+
+    const bookmark = getBookmarkById(req.params.id)
+    if (!bookmark) return sendError(res, 404, 'Bookmark no encontrado')
+
+    const previous = getImageFilename(req.params.id)
+    const filename = `${req.params.id}.${ext}`
+    fs.writeFileSync(path.join(IMAGES_DIR, filename), req.file.buffer)
+
+    if (previous && previous !== filename) {
+      const oldPath = path.join(IMAGES_DIR, previous)
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath)
+    }
+
+    updateImageFilename(req.params.id, filename)
+    const updated = getBookmarkById(req.params.id)!
+    const response: ApiResponse<Bookmark> = { success: true, data: updated }
+    res.json(response)
+  } catch (err) {
+    console.error(err)
+    sendError(res, 500, err instanceof Error ? err.message : 'Unknown error')
+  }
+})
+
+router.delete('/:id/image', (req, res) => {
+  try {
+    const filename = getImageFilename(req.params.id)
+    if (filename) {
+      const filepath = path.join(IMAGES_DIR, filename)
+      if (fs.existsSync(filepath)) fs.unlinkSync(filepath)
+      updateImageFilename(req.params.id, null)
+    }
+    const updated = getBookmarkById(req.params.id)
+    if (!updated) return sendError(res, 404, 'Bookmark no encontrado')
+    const response: ApiResponse<Bookmark> = { success: true, data: updated }
+    res.json(response)
+  } catch (err) {
+    console.error(err)
+    sendError(res, 500, err instanceof Error ? err.message : 'Unknown error')
   }
 })
 

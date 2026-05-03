@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import type { Bookmark } from '@/types'
 import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { resolveBookmarkHue } from '@/composables/useColorHue'
 import MiniCard from './MiniCard.vue'
+
+const router = useRouter()
 
 const props = defineProps<{
   parent: Bookmark
@@ -24,15 +27,10 @@ const initials = computed(() => {
   return trimmed.slice(0, 2).toUpperCase()
 })
 
-const notionUrl = computed(() => {
-  const cleanId = props.parent.id.replace(/-/g, '')
-  return `https://www.notion.so/${cleanId}`
-})
-
 const handleEditClick = (event: Event) => {
   event.preventDefault()
   event.stopPropagation()
-  window.open(notionUrl.value, '_blank', 'noopener,noreferrer')
+  router.push(`/edit/${props.parent.id}`)
 }
 
 const searchQuery = ref('')
@@ -67,7 +65,7 @@ const handleTagClick = (tag: string) => {
         <div v-if="parent.subtitle" class="megacard-sub">{{ parent.subtitle }}</div>
       </div>
       <span class="megacard-badge">{{ children.length }} sites</span>
-      <button class="card-edit mega-edit" aria-label="Editar en Notion" @click="handleEditClick">
+      <button class="card-edit mega-edit" aria-label="Editar" @click="handleEditClick">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 20h9" />
           <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4Z" />

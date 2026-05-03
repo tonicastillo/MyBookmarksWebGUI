@@ -2,6 +2,10 @@
 node_modules
 backend/node_modules
 
+# Datos locales (SQLite + imágenes) — se montan como volumen en runtime
+data
+backend/data
+
 # Build outputs
 dist
 backend/dist

@@ -35,5 +35,8 @@ lerna-debug.log*
 .env.local
 .env.*.local
 
+# Datos locales (SQLite + imágenes subidas)
+backend/data/
+
 # Test
 coverage

@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useBookmarks } from '@/composables/useBookmarks'
 import { hueFromId } from '@/composables/useColorHue'
 
+const router = useRouter()
 const { getCategoriesWithVisibleGroups } = useBookmarks()
 
 const items = computed(() =>
@@ -89,6 +91,15 @@ const handleClick = (id: string, event: MouseEvent) => {
       <div class="brand-name">MyBookmarks</div>
     </div>
 
+    <div class="quick-actions">
+      <button class="quick-btn primary" @click="router.push('/edit')">
+        + Nuevo bookmark
+      </button>
+      <button class="quick-btn" @click="router.push('/categories')">
+        Gestionar categorías
+      </button>
+    </div>
+
     <nav v-if="items.length > 0" class="nav">
       <div class="nav-label">CATEGORIES</div>
       <ul class="nav-list">
@@ -147,6 +158,39 @@ const handleClick = (id: string, event: MouseEvent) => {
   font-weight: 700;
   letter-spacing: -0.015em;
   color: var(--fg, #1c1a14);
+}
+
+.quick-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 18px;
+  padding: 0 6px;
+}
+.quick-btn {
+  font: inherit;
+  font-size: 12.5px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  color: var(--fg-mid, #4a463c);
+  transition: background 120ms ease, color 120ms ease;
+}
+.quick-btn:hover {
+  background: var(--bg-soft, #f3f1ec);
+  color: var(--fg, #1c1a14);
+}
+.quick-btn.primary {
+  background: var(--fg, #1c1a14);
+  color: var(--bg, #faf9f7);
+  font-weight: 500;
+}
+.quick-btn.primary:hover {
+  background: var(--fg-mid, #4a463c);
+  color: var(--bg, #faf9f7);
 }
 
 .nav-label {

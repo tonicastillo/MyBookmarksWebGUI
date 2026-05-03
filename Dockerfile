@@ -27,8 +27,9 @@ FROM node:20-alpine AS backend-builder
 
 WORKDIR /app/backend
 
-# Instalar pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Toolchain para compilar better-sqlite3 si no hay binario precompilado
+RUN apk add --no-cache python3 make g++ \
+ && corepack enable && corepack prepare pnpm@latest --activate
 
 # Copiar archivos de dependencias del backend
 COPY backend/package.json backend/pnpm-lock.yaml ./
@@ -48,12 +49,14 @@ FROM node:20-alpine AS production
 
 WORKDIR /app
 
-# Instalar pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Toolchain temporal para compilar better-sqlite3 al instalar prod deps
+RUN apk add --no-cache --virtual .build-deps python3 make g++ \
+ && corepack enable && corepack prepare pnpm@latest --activate
 
 # Copiar package.json del backend y instalar solo dependencias de producción
 COPY backend/package.json backend/pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --frozen-lockfile --prod \
+ && apk del .build-deps
 
 # Copiar el backend compilado
 COPY --from=backend-builder /app/backend/dist ./dist

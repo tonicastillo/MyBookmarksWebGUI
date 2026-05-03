@@ -1,130 +1,157 @@
 # MyBookmarks2026
 
-Aplicación Vue para gestionar y visualizar bookmarks almacenados en Notion.
+Aplicación Vue para gestionar y visualizar bookmarks personales. Almacenamiento 100% local — sin Notion ni servicios externos.
 
 ## Arquitectura
 
 ```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Vue Frontend  │ ──► │  Backend (API)  │ ──► │   Notion API    │
-│   (SPA + Cache) │ ◄── │   (Proxy/Cache) │ ◄── │   (Databases)   │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│   Vue Frontend  │ ──► │  Backend (API)   │ ──► │  SQLite local   │
+│   (SPA + Cache) │ ◄── │  Express + CRUD  │ ◄── │  + data/images/ │
+└─────────────────┘     └──────────────────┘     └─────────────────┘
 ```
 
 ### Frontend (Vue 3 + TypeScript)
 - SPA con Vue 3 Composition API
-- Caché en localStorage para datos de Notion
+- Pinia para estado, caché localStorage para arranque rápido (TTL 24h)
 - Búsqueda y filtrado en cliente
+- Vistas: `/` (home), `/edit/:id?` (crear/editar bookmark), `/categories` (gestionar categorías)
 
-### Backend (Node.js/Express o similar)
-- Proxy para Notion API (CORS)
-- Endpoint para obtener bookmarks
-- Endpoint para obtener categorías
+### Backend (Node.js + Express + better-sqlite3)
+- API REST contra SQLite local
+- Sirve imágenes estáticas desde `backend/data/images/` en `/images/{filename}`
+- Sin dependencias de red en runtime — la app funciona sin internet
 
-## Notion Databases
+## Base de datos local
 
-### ToniBookmarks
-- **Database ID**: `10a789da-9045-4013-829f-cba8b567046b`
-- **Data Source ID**: `b2f81627-e9af-4a15-8c7b-78bd813e8c71`
-- **URL**: https://www.notion.so/10a789da90454013829fcba8b567046b
+- **Fichero**: `backend/data/bookmarks.db` (SQLite, modo WAL)
+- **Imágenes subidas**: `backend/data/images/{bookmarkId}.{ext}`
+- **Esquema**: definido inline en `backend/src/db/migrate.ts` (se aplica al arrancar el servidor; usa `CREATE TABLE IF NOT EXISTS`).
+- **Backup**: copiar `backend/data/bookmarks.db` y la carpeta `backend/data/images/`. Eso es todo.
+- **Inspección manual**: TablePlus, DB Browser for SQLite o `sqlite3 backend/data/bookmarks.db`.
 
-### ToniBookmarksCategories
-- **Database ID**: `8ff5170e-b891-4542-a1fd-04b4da92c0b1`
-- **Data Source ID**: `fdb51ba2-c0ca-48df-8122-c59db0696cb4`
-- **URL**: https://www.notion.so/8ff5170eb8914542a1fd04b4da92c0b1
+### Tablas
+
+- `categories(id, name, "order", level, padre_id)`
+- `bookmarks(id, name, url, alternate_url, subtitle, category_id, parent_bookmark_id, visible_at_start, status, valoration, color_hue, search_placeholder, search_url_template, image_filename, image_url, created_at, updated_at)`
+- `tags(id, name)` + `bookmark_tags(bookmark_id, tag_id)` (pivot)
+- `bookmarks_fts` virtual (FTS5, sin uso aún — la búsqueda sigue siendo cliente)
+
+Los IDs de bookmarks/categorías importados de Notion son los UUID originales. Los creados desde la app usan `nanoid()`.
 
 ## Modelo de Datos
 
-### Bookmark (ToniBookmarks)
+### Bookmark
 ```typescript
 interface Bookmark {
-  id: string;
-  name: string;                    // Name (title)
-  url: string;                     // URL
-  alternateUrl?: string;           // AlternateURL
-  subtitle?: string;               // Subtitle
-  tags: string[];                  // Tags (multi_select)
-  categoryId?: string;             // Category (relation → ToniBookmarksCategories)
-  visibleAtStart: boolean;         // Visible at Start (checkbox)
-  status: 'Not started' | 'In progress' | 'Done';  // Status
-  valoration?: '⭐' | '⭐⭐' | '⭐⭐⭐' | '⭐⭐⭐⭐' | '⭐⭐⭐⭐⭐';  // Valoration (select)
-  imageUrl?: string;               // imageUrlBase (url) o imageUrl (formula)
-  image?: string;                  // image (file)
-  createdTime: string;             // Created time
-
-  // — Mega cards & site-search (campos opcionales) —
-  parentBookmarkId?: string;       // parentBookmark (relation → self): si está, este bookmark es hijo de otro
-  colorHue?: number;               // ColorHue (number 0–360): override del color de acento (si vacío, se deriva de la categoría)
-  searchPlaceholder?: string;      // SearchPlaceholder (text): placeholder del input de búsqueda en la card
-  searchUrlTemplate?: string;      // searchUrlTemplate (url): plantilla con {q}, ej. "https://store.steampowered.com/search/?term={q}"
+  id: string
+  name: string
+  url: string                       // vacío si es padre de mega card
+  alternateUrl?: string
+  subtitle?: string
+  tags: string[]
+  categoryId?: string
+  visibleAtStart: boolean
+  status: 'Not started' | 'In progress' | 'Done'
+  valoration?: string               // p. ej. '⭐⭐⭐'
+  imageUrl?: string                 // URL servida por backend (/images/...) o externa
+  createdTime: string
+  parentBookmarkId?: string         // mega card: padre del grupo
+  colorHue?: number                 // 0–360, override del color de acento
+  searchPlaceholder?: string
+  searchUrlTemplate?: string        // con {q}
 }
 ```
 
-#### Cómo crear una mega card en Notion
-1. Crea un bookmark "padre" (ej. `Game stores`) con la imagen y subtítulo del grupo. **Deja el campo URL vacío**: la card del padre no es navegable.
-2. Marca el padre como `Visible at Start = true` para que aparezca en la home.
-3. En cada bookmark hijo (Steam, Epic, GOG…), rellena `parentBookmark` con la relación al padre. Los hijos heredan visibilidad del padre, así que su propio `Visible at Start` se ignora cuando van dentro de la mega card.
-4. (Opcional) Si quieres un campo de búsqueda dentro de la card (padre o hijo), rellena `SearchPlaceholder` y `searchUrlTemplate` (con `{q}` donde va la query).
-
-> ⚠️ Los nombres de las propiedades en Notion son **case-sensitive**. Si renombras alguna, hay que actualizar el mapping en `backend/src/services/notion.ts`.
-
-**Tags disponibles**: IoT, Outside, Pirat, Torrent, iOS, Mac, Films, Shows, Music, Books, French, Comics, NAS, MacBookServer, 🎶 Media, Appartament, 🛠️ Tools, Freelance, Develop, Analisis, Sandboxes, Design, Documentation, HomeAssistant, CSS, Hosting, Stock, Textures, Video, VideoConf, 3dPrinting, 3dTools, Shopping, Servers, Gaming, AI, Email, People, Emulators, Translator, Learning, Arduino, Electronic, 3d, HTML, ReactJs, ReactNative, Córdoba, Git, kids, Icons, Images, Social, iot, DevTools, DesignTools, Personal, CommandLine, App, SystemTool, three.js, YouTube, Color, DevDocs, svg, RetroGaming, UseLess, Funny, Testing, home, inspiration, Shaders, DIY, crafts, CloudService, maps, AI Image Generation, MarkDown, PDF, art, music, photos, search, UI, Tools, Typography, roms, ChromeExtension, AI Video Generation, scrapping, player, VisualStudioCodeExtension, mockups, Emule, Tonterías, opensource, npm, canvas, webgl, MCP, VueJS
-
-### Category (ToniBookmarksCategories)
+### Category
 ```typescript
 interface Category {
-  id: string;
-  name: string;       // Name (title)
-  order: number;      // Order (number)
-  level?: number;     // Level (number)
-  padreId?: string;   // Padre (relation → self)
-  hijoIds?: string[]; // Hijo (relation → self)
+  id: string
+  name: string
+  order: number
+  level?: number
+  padreId?: string
+  hijoIds?: string[]
 }
 ```
+
+### Mega cards
+1. Crea un bookmark "padre" con imagen y subtítulo. **Deja `url` vacío** y `visibleAtStart = true`.
+2. En cada bookmark hijo, asigna `parentBookmarkId` al padre. Los hijos heredan visibilidad del padre.
+3. (Opcional) Búsqueda interna: rellena `searchPlaceholder` y `searchUrlTemplate` (con `{q}`).
+
+## API
+
+| Método | Ruta                              | Descripción                                  |
+|--------|-----------------------------------|----------------------------------------------|
+| GET    | `/api/bookmarks`                  | Lista todos los bookmarks                    |
+| GET    | `/api/bookmarks/:id`              | Un bookmark                                  |
+| POST   | `/api/bookmarks`                  | Crear bookmark                               |
+| PUT    | `/api/bookmarks/:id`              | Actualizar (parcial)                         |
+| DELETE | `/api/bookmarks/:id`              | Borrar bookmark + imagen local si existe     |
+| POST   | `/api/bookmarks/:id/image`        | Upload multipart (campo `image`)             |
+| DELETE | `/api/bookmarks/:id/image`        | Borrar imagen local                          |
+| GET    | `/api/bookmarks/tags`             | Lista de nombres de tags conocidos           |
+| GET    | `/api/categories`                 | Lista todas las categorías                   |
+| GET    | `/api/categories/:id`             | Una categoría                                |
+| POST   | `/api/categories`                 | Crear categoría                              |
+| PUT    | `/api/categories/:id`             | Actualizar (parcial)                         |
+| DELETE | `/api/categories/:id`             | Borrar categoría                             |
+| GET    | `/images/:filename`               | Imagen estática (desde `backend/data/images/`) |
+| GET    | `/api/health`                     | Status check                                 |
+
+Todas las respuestas JSON usan `{ success, data, error? }` (`ApiResponse<T>`).
 
 ## Reglas de Negocio
 
 ### Vista Principal (Home)
-1. **Estado inicial (sin filtros)**: Muestra solo bookmarks con `visibleAtStart: true`, agrupados por categoría y ordenados por `category.order`
-2. **Con búsqueda activa**: Muestra TODOS los bookmarks que coincidan (ignora `visibleAtStart`)
-3. **Con etiquetas activas**: Muestra TODOS los bookmarks con esas etiquetas (ignora `visibleAtStart`)
-4. **Búsqueda**: Filtra por nombre, subtitle y tags
+1. **Estado inicial (sin filtros)**: solo bookmarks con `visibleAtStart: true`, agrupados por categoría y ordenados por `category.order`.
+2. **Con búsqueda activa**: TODOS los bookmarks que coincidan (ignora `visibleAtStart`).
+3. **Con etiquetas activas**: TODOS los bookmarks con esas etiquetas (ignora `visibleAtStart`).
+4. **Búsqueda**: por nombre, subtitle y tags.
 
-### Sistema de Etiquetas
-- Las etiquetas funcionan como filtros acumulativos (OR/AND según se defina)
-- Se muestran como botones toggle
-- Al activar una etiqueta, se muestran todos los bookmarks que la contengan
-
-### Caché
-- Al iniciar la app, se descargan todos los datos de Notion
-- Se almacenan en localStorage
-- Incluir mecanismo de invalidación/actualización manual
+### Caché frontend
+- Al iniciar la app: si hay caché válida (TTL 24h), se usa; en paralelo se refresca desde el backend.
+- Los stores actualizan localStorage tras cada mutación (create / update / delete) para que el siguiente arranque vea el cambio inmediatamente.
 
 ## Estructura del Proyecto
 
 ```
+backend/
+├── data/                              # gitignored: bookmarks.db + images/
+├── src/
+│   ├── db/
+│   │   ├── connection.ts              # singleton Database (better-sqlite3)
+│   │   ├── migrate.ts                 # schema inline + runMigrations()
+│   │   └── queries/
+│   │       ├── bookmarks.ts
+│   │       └── categories.ts
+│   ├── routes/
+│   │   ├── bookmarks.ts               # CRUD + upload imagen
+│   │   └── categories.ts              # CRUD
+│   ├── types/index.ts
+│   └── index.ts                       # boot: runMigrations + express.static + routers
+└── package.json
+
 src/
-├── api/                    # Llamadas al backend
-│   └── notion.ts
+├── api/notion.ts                      # cliente axios + tipos input
 ├── components/
-│   ├── SearchBox.vue       # Caja de búsqueda
-│   ├── TagFilter.vue       # Listado de etiquetas
-│   ├── CategorySection.vue # Sección de categoría con sus bookmarks
-│   ├── BookmarkCard.vue    # Tarjeta de bookmark individual
-│   └── BookmarkList.vue    # Lista de bookmarks (búsqueda)
-├── composables/
-│   ├── useBookmarks.ts     # Lógica de bookmarks
-│   ├── useCategories.ts    # Lógica de categorías
-│   ├── useCache.ts         # Gestión de caché localStorage
-│   └── useSearch.ts        # Lógica de búsqueda y filtrado
-├── stores/                 # Pinia stores
-│   ├── bookmarks.ts
+│   ├── BookmarkCard.vue               # botón Editar → /edit/:id
+│   ├── BookmarkForm.vue               # formulario (crear/editar)
+│   ├── BookmarkList.vue
+│   ├── CategorySection.vue
+│   ├── MegaCard.vue, MiniCard.vue
+│   ├── SearchBox.vue, TagFilter.vue, Sidebar.vue
+│   └── EmptyState.vue, ErrorMessage.vue, LoadingSpinner.vue
+├── composables/                       # useBookmarks, useCategories, useCache, etc.
+├── stores/
+│   ├── bookmarks.ts                   # CRUD methods + invalidate()
 │   └── categories.ts
-├── types/
-│   └── index.ts            # Interfaces TypeScript
 ├── views/
-│   ├── HomeView.vue        # Vista principal
-│   └── EditView.vue        # Vista de edición (Fase 2)
+│   ├── HomeView.vue
+│   ├── EditView.vue
+│   └── CategoriesView.vue
+├── router/index.ts                    # /, /edit/:id?, /categories
 ├── App.vue
 └── main.ts
 ```
@@ -132,27 +159,23 @@ src/
 ## Variables de Entorno
 
 ```env
-VITE_API_URL=http://localhost:3000/api
-```
-
-Backend:
-```env
-NOTION_API_KEY=secret_xxx
-NOTION_BOOKMARKS_DB_ID=10a789da-9045-4013-829f-cba8b567046b
-NOTION_CATEGORIES_DB_ID=8ff5170e-b891-4542-a1fd-04b4da92c0b1
+PORT=3003
+PUBLIC_BASE_URL=             # vacío en dev (Vite proxy /images → backend)
 ```
 
 ## Comandos
 
 ```bash
-# Desarrollo
+# Frontend
 npm run dev
-
-# Build
 npm run build
-
-# Lint
 npm run lint
+
+# Backend
+cd backend
+npm run dev
+npm run build
+npm start
 ```
 
 ## Convenciones de Código

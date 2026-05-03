@@ -23,7 +23,7 @@ export const hueFromId = (id: string | undefined | null): number => {
 
 /**
  * Resuelve la tonalidad efectiva de un bookmark:
- * 1. Override explícito en `colorHue` (campo de Notion).
+ * 1. Override explícito en `colorHue`.
  * 2. Derivada de la categoría.
  * 3. Fallback derivado del propio id.
  */

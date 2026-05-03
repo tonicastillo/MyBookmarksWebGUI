@@ -1,7 +1,15 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { Bookmark } from '@/types'
-import { fetchBookmarks } from '@/api/notion'
+import {
+  fetchBookmarks,
+  createBookmark as apiCreateBookmark,
+  updateBookmark as apiUpdateBookmark,
+  deleteBookmark as apiDeleteBookmark,
+  uploadBookmarkImage as apiUploadImage,
+  deleteBookmarkImage as apiDeleteImage,
+  type BookmarkInput
+} from '@/api/notion'
 import { useCache } from '@/composables/useCache'
 import { groupBookmarksByParent, type BookmarkGroup } from '@/composables/useBookmarkGroups'
 
@@ -12,7 +20,7 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  const { saveToCache, getFromCache, isCacheValid } = useCache()
+  const { saveToCache, getFromCache, isCacheValid, clearCache } = useCache()
 
   const tagCounts = computed(() => {
     const counts = new Map<string, number>()
@@ -180,6 +188,55 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
     return results
   }
 
+  const upsertLocal = (bookmark: Bookmark): void => {
+    const idx = bookmarks.value.findIndex(b => b.id === bookmark.id)
+    if (idx >= 0) bookmarks.value.splice(idx, 1, bookmark)
+    else bookmarks.value.push(bookmark)
+    saveToCache(CACHE_KEY, bookmarks.value)
+  }
+
+  const removeLocal = (id: string): void => {
+    bookmarks.value = bookmarks.value.filter(b => b.id !== id && b.parentBookmarkId !== id)
+    saveToCache(CACHE_KEY, bookmarks.value)
+  }
+
+  const create = async (input: BookmarkInput): Promise<Bookmark> => {
+    const created = await apiCreateBookmark(input)
+    upsertLocal(created)
+    return created
+  }
+
+  const update = async (id: string, input: Partial<BookmarkInput>): Promise<Bookmark> => {
+    const updated = await apiUpdateBookmark(id, input)
+    upsertLocal(updated)
+    return updated
+  }
+
+  const remove = async (id: string): Promise<void> => {
+    await apiDeleteBookmark(id)
+    removeLocal(id)
+  }
+
+  const uploadImage = async (id: string, file: File): Promise<Bookmark> => {
+    const updated = await apiUploadImage(id, file)
+    upsertLocal(updated)
+    return updated
+  }
+
+  const removeImage = async (id: string): Promise<Bookmark> => {
+    const updated = await apiDeleteImage(id)
+    upsertLocal(updated)
+    return updated
+  }
+
+  const getById = (id: string): Bookmark | undefined => {
+    return bookmarks.value.find(b => b.id === id)
+  }
+
+  const invalidate = (): void => {
+    clearCache(CACHE_KEY)
+  }
+
   return {
     bookmarks,
     loading,
@@ -196,6 +253,13 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
     searchAndFilterGroups,
     search,
     filterByTags,
-    searchAndFilter
+    searchAndFilter,
+    getById,
+    create,
+    update,
+    remove,
+    uploadImage,
+    removeImage,
+    invalidate
   }
 })
