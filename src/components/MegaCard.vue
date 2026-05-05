@@ -3,9 +3,11 @@ import type { Bookmark } from '@/types'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { resolveBookmarkHue } from '@/composables/useColorHue'
+import { useCategoriesStore } from '@/stores/categories'
 import MiniCard from './MiniCard.vue'
 
 const router = useRouter()
+const categoriesStore = useCategoriesStore()
 
 const props = defineProps<{
   parent: Bookmark
@@ -16,7 +18,12 @@ const emit = defineEmits<{
   'tag-click': [tag: string]
 }>()
 
-const hue = computed(() => resolveBookmarkHue(props.parent))
+const hue = computed(() => {
+  const cat = props.parent.categoryId
+    ? categoriesStore.getById(props.parent.categoryId)
+    : null
+  return resolveBookmarkHue(props.parent, cat?.color)
+})
 const hasSearch = computed(() => Boolean(props.parent.searchUrlTemplate))
 
 const initials = computed(() => {
@@ -49,7 +56,11 @@ const handleTagClick = (tag: string) => {
 </script>
 
 <template>
-  <div class="megacard" :style="{ '--c': hue }">
+  <div
+    class="megacard"
+    :class="{ 'no-color': hue === null }"
+    :style="hue !== null ? { '--c': hue } : {}"
+  >
     <div class="megacard-head">
       <div class="card-thumb mega-thumb">
         <img
@@ -139,6 +150,13 @@ const handleTagClick = (tag: string) => {
   inset: 0;
   background: radial-gradient(120% 80% at 0% 0%, oklch(0.92 0.06 var(--c) / 0.32), transparent 55%);
   pointer-events: none;
+}
+.megacard.no-color::before,
+.megacard.no-color::after { display: none; }
+.megacard.no-color .megacard-badge {
+  color: var(--fg-mid, #4a463c);
+  background: var(--bg-soft, #f3f1ec);
+  border-color: var(--border, rgba(28, 26, 20, 0.08));
 }
 
 .megacard-head {

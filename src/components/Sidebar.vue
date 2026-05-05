@@ -2,24 +2,107 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useBookmarks } from '@/composables/useBookmarks'
-import { hueFromId } from '@/composables/useColorHue'
+import { useBookmarksStore } from '@/stores/bookmarks'
+import { useCategoriesStore } from '@/stores/categories'
+import { hueFromHex } from '@/composables/useColorHue'
+import { useCategoryFilter } from '@/composables/useCategoryFilter'
 
 const router = useRouter()
 const { getCategoriesWithVisibleGroups } = useBookmarks()
+const bookmarksStore = useBookmarksStore()
+const categoriesStore = useCategoriesStore()
+const { categoryFilter, setFilter } = useCategoryFilter()
 
-const items = computed(() =>
-  getCategoriesWithVisibleGroups().map(({ category, groups }) => ({
-    id: category.id,
-    name: category.name,
-    count: groups.length,
-    hue: hueFromId(category.id),
-  })),
-)
+// Mapa id → ids de todos sus descendientes (subcategorías recursivas).
+const descendantMap = computed(() => {
+  const childrenOf = new Map<string, string[]>()
+  categoriesStore.categories.forEach((c) => {
+    if (!c.padreId) return
+    const arr = childrenOf.get(c.padreId) ?? []
+    arr.push(c.id)
+    childrenOf.set(c.padreId, arr)
+  })
+
+  const map = new Map<string, string[]>()
+  const collect = (id: string): string[] => {
+    if (map.has(id)) return map.get(id) as string[]
+    const direct = childrenOf.get(id) ?? []
+    const all: string[] = [...direct]
+    direct.forEach((childId) => {
+      all.push(...collect(childId))
+    })
+    map.set(id, all)
+    return all
+  }
+  categoriesStore.categories.forEach((c) => collect(c.id))
+  return map
+})
+
+// Subcategorías directas (con bookmarks) por categoría padre.
+const subcategoriesByParent = computed(() => {
+  const result = new Map<
+    string,
+    { id: string; name: string; count: number; hue: number | null }[]
+  >()
+  const all = categoriesStore.orderedCategories
+
+  all.forEach((parent) => {
+    const directChildren = all.filter((c) => c.padreId === parent.id)
+    const list = directChildren
+      .map((sub) => {
+        const subTreeIds = [sub.id, ...(descendantMap.value.get(sub.id) ?? [])]
+        const count = bookmarksStore.bookmarks.filter(
+          (b) => b.categoryId && subTreeIds.includes(b.categoryId),
+        ).length
+        return { id: sub.id, name: sub.name, count, hue: hueFromHex(sub.color) }
+      })
+      .filter((s) => s.count > 0)
+    if (list.length > 0) result.set(parent.id, list)
+  })
+
+  return result
+})
+
+const items = computed(() => {
+  const all = getCategoriesWithVisibleGroups()
+  const groupCountById = new Map<string, number>()
+  all.forEach(({ category, groups }) => groupCountById.set(category.id, groups.length))
+
+  return all
+    .filter(({ category }) => !category.padreId)
+    .map(({ category }) => {
+      const ids = [category.id, ...(descendantMap.value.get(category.id) ?? [])]
+      const count = ids.reduce((sum, id) => sum + (groupCountById.get(id) ?? 0), 0)
+      return {
+        id: category.id,
+        name: category.name,
+        count,
+        hue: hueFromHex(category.color),
+        hasSubcategories: subcategoriesByParent.value.has(category.id),
+      }
+    })
+})
+
+const directCountFor = (id: string): number => {
+  return bookmarksStore.bookmarks.filter((b) => b.categoryId === id).length
+}
+
+const totalCountFor = (id: string): number => {
+  const ids = [id, ...(descendantMap.value.get(id) ?? [])]
+  return bookmarksStore.bookmarks.filter((b) => b.categoryId && ids.includes(b.categoryId)).length
+}
+
+const expandedId = ref<string | null>(null)
+
+const toggleExpand = (id: string, event: MouseEvent) => {
+  event.preventDefault()
+  event.stopPropagation()
+  expandedId.value = expandedId.value === id ? null : id
+}
 
 const activeId = ref<string | null>(null)
 
 let observer: IntersectionObserver | null = null
-
 const visibleEntries = new Map<string, number>()
 
 const recomputeActive = () => {
@@ -62,10 +145,13 @@ const observe = () => {
   })
 }
 
-watch(items, () => {
-  // Re-observar cuando cambian las categorías (tras cargar datos)
-  requestAnimationFrame(() => observe())
-}, { flush: 'post' })
+watch(
+  items,
+  () => {
+    requestAnimationFrame(() => observe())
+  },
+  { flush: 'post' },
+)
 
 onMounted(() => {
   requestAnimationFrame(() => observe())
@@ -75,12 +161,54 @@ onUnmounted(() => {
   if (observer) observer.disconnect()
 })
 
+const fastScrollTo = (target: HTMLElement) => {
+  const targetTop = target.getBoundingClientRect().top + window.scrollY
+  const startTop = window.scrollY
+  const distance = targetTop - startTop
+  if (Math.abs(distance) < 1) return
+  const duration = 180
+  const startTime = performance.now()
+  const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3)
+  const step = (now: number) => {
+    const elapsed = now - startTime
+    const t = Math.min(elapsed / duration, 1)
+    window.scrollTo(0, startTop + distance * easeOutCubic(t))
+    if (t < 1) requestAnimationFrame(step)
+  }
+  requestAnimationFrame(step)
+}
+
 const handleClick = (id: string, event: MouseEvent) => {
   const target = document.getElementById(`category-${id}`)
   if (!target) return
   event.preventDefault()
   activeId.value = id
-  target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  fastScrollTo(target)
+}
+
+const applyAllInCategory = (parentId: string, parentName: string) => {
+  const ids = [parentId, ...(descendantMap.value.get(parentId) ?? [])]
+  setFilter(ids, parentName)
+  expandedId.value = null
+}
+
+const applyMainOnly = (parentId: string, parentName: string) => {
+  setFilter([parentId], `${parentName} · solo principal`)
+  expandedId.value = null
+}
+
+const applySubcategory = (subId: string, subName: string) => {
+  const ids = [subId, ...(descendantMap.value.get(subId) ?? [])]
+  setFilter(ids, subName)
+  expandedId.value = null
+}
+
+const isFilterActiveForIds = (ids: string[]): boolean => {
+  const current = categoryFilter.value
+  if (!current) return false
+  if (current.categoryIds.length !== ids.length) return false
+  const set = new Set(current.categoryIds)
+  return ids.every((id) => set.has(id))
 }
 </script>
 
@@ -103,18 +231,84 @@ const handleClick = (id: string, event: MouseEvent) => {
     <nav v-if="items.length > 0" class="nav">
       <div class="nav-label">CATEGORIES</div>
       <ul class="nav-list">
-        <li v-for="item in items" :key="item.id">
-          <a
-            :href="`#category-${item.id}`"
-            class="nav-item"
-            :class="{ active: activeId === item.id }"
-            :style="{ '--c': item.hue }"
-            @click="handleClick(item.id, $event)"
+        <li v-for="item in items" :key="item.id" class="nav-li">
+          <div
+            class="nav-row"
+            :class="{ 'no-accent': item.hue === null }"
+            :style="item.hue !== null ? { '--c': item.hue } : {}"
           >
-            <span class="dot"></span>
-            <span class="name">{{ item.name }}</span>
-            <span class="count">{{ item.count }}</span>
-          </a>
+            <a
+              :href="`#category-${item.id}`"
+              class="nav-item"
+              :class="{ active: activeId === item.id }"
+              @click="handleClick(item.id, $event)"
+            >
+              <span class="dot"></span>
+              <span class="name">{{ item.name }}</span>
+              <span class="count">{{ item.count }}</span>
+            </a>
+            <button
+              v-if="item.hasSubcategories"
+              type="button"
+              class="chevron"
+              :class="{ open: expandedId === item.id }"
+              :aria-label="expandedId === item.id ? 'Cerrar subcategorías' : 'Abrir subcategorías'"
+              :aria-expanded="expandedId === item.id"
+              @click="toggleExpand(item.id, $event)"
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+          </div>
+
+          <div v-if="expandedId === item.id" class="submenu">
+            <button
+              type="button"
+              class="sub-item special"
+              :class="{ active: isFilterActiveForIds([item.id, ...(descendantMap.get(item.id) ?? [])]) }"
+              @click="applyAllInCategory(item.id, item.name)"
+            >
+              <span class="sub-icon" aria-hidden="true">∗</span>
+              <span class="sub-name">Todos los elementos</span>
+              <span class="sub-count">{{ totalCountFor(item.id) }}</span>
+            </button>
+            <button
+              type="button"
+              class="sub-item special"
+              :class="{ active: isFilterActiveForIds([item.id]) }"
+              @click="applyMainOnly(item.id, item.name)"
+            >
+              <span class="sub-icon" aria-hidden="true">·</span>
+              <span class="sub-name">Solo en categoría principal</span>
+              <span class="sub-count">{{ directCountFor(item.id) }}</span>
+            </button>
+            <button
+              v-for="sub in subcategoriesByParent.get(item.id)"
+              :key="sub.id"
+              type="button"
+              class="sub-item"
+              :class="{
+                active: isFilterActiveForIds([sub.id, ...(descendantMap.get(sub.id) ?? [])]),
+                'no-accent': sub.hue === null,
+              }"
+              :style="sub.hue !== null ? { '--c': sub.hue } : {}"
+              @click="applySubcategory(sub.id, sub.name)"
+            >
+              <span class="sub-dot"></span>
+              <span class="sub-name">{{ sub.name }}</span>
+              <span class="sub-count">{{ sub.count }}</span>
+            </button>
+          </div>
         </li>
       </ul>
     </nav>
@@ -211,8 +405,22 @@ const handleClick = (id: string, event: MouseEvent) => {
   gap: 1px;
 }
 
-.nav-item {
+.nav-li {
+  display: flex;
+  flex-direction: column;
+}
+
+.nav-row {
   --c: 220;
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  border-radius: 8px;
+}
+
+.nav-item {
+  flex: 1;
+  min-width: 0;
   position: relative;
   display: flex;
   align-items: center;
@@ -250,6 +458,8 @@ const handleClick = (id: string, event: MouseEvent) => {
   background: oklch(0.65 0.16 var(--c));
   flex-shrink: 0;
 }
+.nav-row.no-accent .dot { background: transparent; }
+.nav-row.no-accent .nav-item.active::before { background: transparent; }
 
 .name {
   flex: 1;
@@ -266,5 +476,95 @@ const handleClick = (id: string, event: MouseEvent) => {
 }
 .nav-item.active .count {
   color: var(--fg-soft, #7a7468);
+}
+
+.chevron {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  margin-left: 2px;
+  border: 0;
+  background: transparent;
+  color: var(--fg-faint, #a8a294);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, transform 160ms ease;
+}
+.chevron:hover {
+  background: var(--bg-soft, #f3f1ec);
+  color: var(--fg, #1c1a14);
+}
+.chevron.open {
+  color: var(--fg, #1c1a14);
+  transform: rotate(180deg);
+}
+
+.submenu {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 4px 0 6px 18px;
+  padding-left: 8px;
+  border-left: 1px dashed var(--border, rgba(28, 26, 20, 0.12));
+}
+
+.sub-item {
+  --c: 220;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  color: var(--fg-mid, #4a463c);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.sub-item:hover {
+  background: var(--bg-soft, #f3f1ec);
+  color: var(--fg, #1c1a14);
+}
+.sub-item.active {
+  background: var(--bg-soft, #f1efe9);
+  color: var(--fg, #1c1a14);
+  font-weight: 500;
+}
+.sub-item.special {
+  color: var(--fg-mid, #4a463c);
+}
+.sub-icon {
+  width: 14px;
+  display: inline-grid;
+  place-items: center;
+  color: var(--fg-faint, #a8a294);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.sub-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: oklch(0.7 0.14 var(--c));
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+.sub-item.no-accent .sub-dot { background: transparent; }
+.sub-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sub-count {
+  font-size: 11.5px;
+  color: var(--fg-faint, #a8a294);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
 }
 </style>

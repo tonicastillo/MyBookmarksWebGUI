@@ -1,12 +1,13 @@
+import type { Database as DatabaseType } from 'better-sqlite3'
 import db from './connection.js'
 
-const SCHEMA = `
+const BASE_SCHEMA = `
 CREATE TABLE IF NOT EXISTS categories (
   id            TEXT PRIMARY KEY,
   name          TEXT NOT NULL,
   "order"       INTEGER NOT NULL DEFAULT 0,
-  level         INTEGER,
   padre_id      TEXT REFERENCES categories(id) ON DELETE SET NULL,
+  color         TEXT,
   created_at    TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -15,18 +16,16 @@ CREATE TABLE IF NOT EXISTS bookmarks (
   id                    TEXT PRIMARY KEY,
   name                  TEXT NOT NULL,
   url                   TEXT,
-  alternate_url         TEXT,
   subtitle              TEXT,
   category_id           TEXT REFERENCES categories(id) ON DELETE SET NULL,
   parent_bookmark_id    TEXT REFERENCES bookmarks(id) ON DELETE CASCADE,
   visible_at_start      INTEGER NOT NULL DEFAULT 0,
-  status                TEXT NOT NULL DEFAULT 'Not started',
-  valoration            TEXT,
-  color_hue             INTEGER CHECK (color_hue IS NULL OR (color_hue BETWEEN 0 AND 360)),
+  color                 TEXT,
   search_placeholder    TEXT,
   search_url_template   TEXT,
   image_filename        TEXT,
   image_url             TEXT,
+  resboard              TEXT,
   created_at            TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -53,6 +52,90 @@ CREATE VIRTUAL TABLE IF NOT EXISTS bookmarks_fts USING fts5(
 );
 `
 
+interface Migration {
+  version: number
+  up: (database: DatabaseType) => void
+}
+
+const hasColumn = (database: DatabaseType, table: string, column: string): boolean => {
+  const cols = database.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
+  return cols.some((c) => c.name === column)
+}
+
+const hueToHex = (hue: number): string => {
+  const h = ((hue % 360) + 360) % 360
+  const s = 0.65
+  const l = 0.55
+  const c = (1 - Math.abs(2 * l - 1)) * s
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
+  const m = l - c / 2
+  let r = 0, g = 0, b = 0
+  if (h < 60) [r, g, b] = [c, x, 0]
+  else if (h < 120) [r, g, b] = [x, c, 0]
+  else if (h < 180) [r, g, b] = [0, c, x]
+  else if (h < 240) [r, g, b] = [0, x, c]
+  else if (h < 300) [r, g, b] = [x, 0, c]
+  else [r, g, b] = [c, 0, x]
+  const toHex = (n: number) => Math.round((n + m) * 255).toString(16).padStart(2, '0')
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`
+}
+
+const MIGRATIONS: Migration[] = [
+  {
+    version: 1,
+    up: (database) => {
+      if (!hasColumn(database, 'categories', 'color')) {
+        database.exec(`ALTER TABLE categories ADD COLUMN color TEXT`)
+      }
+      if (hasColumn(database, 'categories', 'level')) {
+        database.exec(`ALTER TABLE categories DROP COLUMN level`)
+      }
+    }
+  },
+  {
+    version: 2,
+    up: (database) => {
+      if (!hasColumn(database, 'bookmarks', 'color')) {
+        database.exec(`ALTER TABLE bookmarks ADD COLUMN color TEXT`)
+      }
+      if (hasColumn(database, 'bookmarks', 'color_hue')) {
+        const rows = database.prepare(`
+          SELECT id, color_hue FROM bookmarks WHERE color_hue IS NOT NULL
+        `).all() as Array<{ id: string; color_hue: number }>
+        const setColor = database.prepare(`UPDATE bookmarks SET color = ? WHERE id = ?`)
+        for (const r of rows) setColor.run(hueToHex(r.color_hue), r.id)
+        database.exec(`ALTER TABLE bookmarks DROP COLUMN color_hue`)
+      }
+      if (hasColumn(database, 'bookmarks', 'alternate_url')) {
+        database.exec(`ALTER TABLE bookmarks DROP COLUMN alternate_url`)
+      }
+      if (hasColumn(database, 'bookmarks', 'status')) {
+        database.exec(`ALTER TABLE bookmarks DROP COLUMN status`)
+      }
+      if (hasColumn(database, 'bookmarks', 'valoration')) {
+        database.exec(`ALTER TABLE bookmarks DROP COLUMN valoration`)
+      }
+      if (!hasColumn(database, 'bookmarks', 'resboard')) {
+        database.exec(`ALTER TABLE bookmarks ADD COLUMN resboard TEXT`)
+      }
+    }
+  }
+]
+
+const readUserVersion = (database: DatabaseType): number => {
+  const result = database.pragma('user_version', { simple: true })
+  return typeof result === 'number' ? result : 0
+}
+
 export const runMigrations = (): void => {
-  db.exec(SCHEMA)
+  db.exec(BASE_SCHEMA)
+  const current = readUserVersion(db)
+  for (const m of MIGRATIONS) {
+    if (m.version > current) {
+      const tx = db.transaction(m.up)
+      tx(db)
+      db.pragma(`user_version = ${m.version}`)
+      console.log(`[migrate] applied v${m.version}`)
+    }
+  }
 }

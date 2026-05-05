@@ -4,6 +4,7 @@ import { useBookmarks } from "@/composables/useBookmarks";
 import { useBookmarksStore } from "@/stores/bookmarks";
 import { useSearch } from "@/composables/useSearch";
 import { useTags } from "@/composables/useTags";
+import { useCategoryFilter } from "@/composables/useCategoryFilter";
 import SearchBox from "@/components/SearchBox.vue";
 import TagFilter from "@/components/TagFilter.vue";
 import CategorySection from "@/components/CategorySection.vue";
@@ -25,6 +26,7 @@ const {
 const bookmarksStore = useBookmarksStore();
 const { searchQuery, debouncedQuery, clearSearch } = useSearch();
 const { selectedTags, toggleTag, clearTags } = useTags();
+const { categoryFilter, clearFilter: clearCategoryFilter } = useCategoryFilter();
 const { getCacheTimestamp } = useCache();
 
 const showTags = ref(false);
@@ -32,7 +34,11 @@ const now = ref(Date.now());
 let tickInterval: ReturnType<typeof setInterval> | null = null;
 
 const isFiltering = computed(() => {
-  return debouncedQuery.value.trim() !== "" || selectedTags.value.length > 0;
+  return (
+    debouncedQuery.value.trim() !== "" ||
+    selectedTags.value.length > 0 ||
+    categoryFilter.value !== null
+  );
 });
 
 const categoriesWithGroups = computed(() => {
@@ -40,7 +46,11 @@ const categoriesWithGroups = computed(() => {
 });
 
 const filteredGroups = computed(() => {
-  return getFilteredGroups(debouncedQuery.value, selectedTags.value);
+  return getFilteredGroups(
+    debouncedQuery.value,
+    selectedTags.value,
+    categoryFilter.value?.categoryIds,
+  );
 });
 
 const allTags = computed(() => bookmarksStore.allTags);
@@ -83,6 +93,7 @@ const handleTagClick = (tag: string) => {
 const handleClearFilters = () => {
   clearSearch();
   clearTags();
+  clearCategoryFilter();
 };
 
 const handleRefresh = async () => {
@@ -96,6 +107,12 @@ const handleRetry = () => {
 watch(selectedTags, (tags) => {
   if (tags.length > 0) {
     showTags.value = true;
+  }
+});
+
+watch(categoryFilter, (value) => {
+  if (value) {
+    window.scrollTo({ top: 0, behavior: "auto" });
   }
 });
 
@@ -186,6 +203,14 @@ onUnmounted(() => {
       <!-- Filtros activos -->
       <div v-if="isFiltering" class="active-filters">
         <span class="active-label">Filtros activos:</span>
+        <span v-if="categoryFilter" class="chip chip-category">
+          📁 {{ categoryFilter.label }}
+          <button
+            @click="clearCategoryFilter()"
+            class="chip-x"
+            aria-label="Quitar filtro de categoría"
+          >×</button>
+        </span>
         <span v-if="debouncedQuery" class="chip">
           "{{ debouncedQuery }}"
         </span>
@@ -363,6 +388,16 @@ onUnmounted(() => {
   background: var(--bg-soft, #f3f1ec);
   color: var(--fg, #1c1a14);
   font-size: 12.5px;
+}
+.chip.chip-category {
+  background: var(--fg, #1c1a14);
+  color: var(--bg, #faf9f7);
+}
+.chip.chip-category .chip-x {
+  color: rgba(250, 249, 247, 0.7);
+}
+.chip.chip-category .chip-x:hover {
+  color: var(--bg, #faf9f7);
 }
 .chip-x {
   background: transparent;

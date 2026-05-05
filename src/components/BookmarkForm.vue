@@ -4,6 +4,7 @@ import type { Bookmark } from '@/types'
 import { useCategoriesStore } from '@/stores/categories'
 import { useBookmarksStore } from '@/stores/bookmarks'
 import type { BookmarkInput } from '@/api/notion'
+import CategoryColorPicker from '@/components/CategoryColorPicker.vue'
 
 const props = defineProps<{
   bookmark?: Bookmark
@@ -21,14 +22,11 @@ const bookmarksStore = useBookmarksStore()
 
 const name = ref(props.bookmark?.name ?? '')
 const url = ref(props.bookmark?.url ?? '')
-const alternateUrl = ref(props.bookmark?.alternateUrl ?? '')
 const subtitle = ref(props.bookmark?.subtitle ?? '')
 const categoryId = ref(props.bookmark?.categoryId ?? '')
 const parentBookmarkId = ref(props.bookmark?.parentBookmarkId ?? '')
 const visibleAtStart = ref(props.bookmark?.visibleAtStart ?? false)
-const status = ref<Bookmark['status']>(props.bookmark?.status ?? 'Not started')
-const valoration = ref(props.bookmark?.valoration ?? '')
-const colorHue = ref<number | ''>(props.bookmark?.colorHue ?? '')
+const color = ref<string | null>(props.bookmark?.color ?? null)
 const searchPlaceholder = ref(props.bookmark?.searchPlaceholder ?? '')
 const searchUrlTemplate = ref(props.bookmark?.searchUrlTemplate ?? '')
 const tags = ref<string[]>([...(props.bookmark?.tags ?? [])])
@@ -104,14 +102,11 @@ const handleSubmit = (event: Event) => {
   const input: BookmarkInput = {
     name: name.value.trim(),
     url: url.value.trim() || null,
-    alternateUrl: alternateUrl.value.trim() || null,
     subtitle: subtitle.value.trim() || null,
     categoryId: categoryId.value || null,
     parentBookmarkId: parentBookmarkId.value || null,
     visibleAtStart: visibleAtStart.value,
-    status: status.value,
-    valoration: valoration.value || null,
-    colorHue: colorHue.value === '' ? null : Number(colorHue.value),
+    color: color.value,
     searchPlaceholder: searchPlaceholder.value.trim() || null,
     searchUrlTemplate: searchUrlTemplate.value.trim() || null,
     tags: tags.value
@@ -125,14 +120,11 @@ watch(
     if (!b) return
     name.value = b.name
     url.value = b.url ?? ''
-    alternateUrl.value = b.alternateUrl ?? ''
     subtitle.value = b.subtitle ?? ''
     categoryId.value = b.categoryId ?? ''
     parentBookmarkId.value = b.parentBookmarkId ?? ''
     visibleAtStart.value = b.visibleAtStart
-    status.value = b.status
-    valoration.value = b.valoration ?? ''
-    colorHue.value = b.colorHue ?? ''
+    color.value = b.color ?? null
     searchPlaceholder.value = b.searchPlaceholder ?? ''
     searchUrlTemplate.value = b.searchUrlTemplate ?? ''
     tags.value = [...b.tags]
@@ -181,11 +173,6 @@ watch(
         </label>
 
         <label class="field">
-          <span class="label">URL alternativa</span>
-          <input v-model="alternateUrl" type="url" />
-        </label>
-
-        <label class="field">
           <span class="label">Subtítulo</span>
           <input v-model="subtitle" type="text" />
         </label>
@@ -212,32 +199,9 @@ watch(
           </label>
         </div>
 
-        <div class="row">
-          <label class="field">
-            <span class="label">Estado</span>
-            <select v-model="status">
-              <option value="Not started">Not started</option>
-              <option value="In progress">In progress</option>
-              <option value="Done">Done</option>
-            </select>
-          </label>
-
-          <label class="field">
-            <span class="label">Valoración</span>
-            <select v-model="valoration">
-              <option value="">— Sin valorar —</option>
-              <option value="⭐">⭐</option>
-              <option value="⭐⭐">⭐⭐</option>
-              <option value="⭐⭐⭐">⭐⭐⭐</option>
-              <option value="⭐⭐⭐⭐">⭐⭐⭐⭐</option>
-              <option value="⭐⭐⭐⭐⭐">⭐⭐⭐⭐⭐</option>
-            </select>
-          </label>
-
-          <label class="field">
-            <span class="label">Color (0–360)</span>
-            <input v-model="colorHue" type="number" min="0" max="360" placeholder="auto" />
-          </label>
+        <div class="color-row">
+          <span class="label">Color</span>
+          <CategoryColorPicker v-model="color" />
         </div>
 
         <label class="field toggle">
@@ -411,6 +375,15 @@ watch(
 }
 .field.toggle span {
   font-size: 13.5px;
+}
+
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.color-row .label {
+  margin: 0;
 }
 
 .tags-input {

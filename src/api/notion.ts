@@ -8,25 +8,29 @@ const api = axios.create({
 export interface BookmarkInput {
   name: string
   url?: string | null
-  alternateUrl?: string | null
   subtitle?: string | null
   categoryId?: string | null
   parentBookmarkId?: string | null
   visibleAtStart?: boolean
-  status?: Bookmark['status']
-  valoration?: string | null
-  colorHue?: number | null
+  color?: string | null
   searchPlaceholder?: string | null
   searchUrlTemplate?: string | null
   imageUrl?: string | null
   tags?: string[]
+  resboard?: Record<string, unknown> | null
 }
 
 export interface CategoryInput {
   name: string
   order?: number
-  level?: number | null
   padreId?: string | null
+  color?: string | null
+}
+
+export interface CategoryReorderEntry {
+  id: string
+  order: number
+  padreId: string | null
 }
 
 const unwrap = <T>(response: { data: ApiResponse<T> }): T => {
@@ -93,4 +97,9 @@ export const updateCategory = async (id: string, input: Partial<CategoryInput>):
 export const deleteCategoryById = async (id: string): Promise<void> => {
   const response = await api.delete<ApiResponse<{ id: string }>>(`/categories/${id}`)
   unwrap(response)
+}
+
+export const reorderCategories = async (updates: CategoryReorderEntry[]): Promise<Category[]> => {
+  const response = await api.put<ApiResponse<Category[]>>('/categories/reorder', updates)
+  return unwrap(response)
 }

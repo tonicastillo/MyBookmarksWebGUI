@@ -3,8 +3,10 @@ import type { Bookmark } from '@/types'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { resolveBookmarkHue } from '@/composables/useColorHue'
+import { useCategoriesStore } from '@/stores/categories'
 
 const router = useRouter()
+const categoriesStore = useCategoriesStore()
 
 const props = defineProps<{
   bookmark: Bookmark
@@ -14,7 +16,12 @@ const emit = defineEmits<{
   'tag-click': [tag: string]
 }>()
 
-const hue = computed(() => resolveBookmarkHue(props.bookmark))
+const hue = computed(() => {
+  const cat = props.bookmark.categoryId
+    ? categoriesStore.getById(props.bookmark.categoryId)
+    : null
+  return resolveBookmarkHue(props.bookmark, cat?.color)
+})
 
 const hasUrl = computed(() => Boolean(props.bookmark.url))
 
@@ -76,11 +83,11 @@ const cardTag = computed(() => (hasUrl.value ? 'a' : 'div'))
   <component
     :is="cardTag"
     class="card"
-    :class="{ 'no-color': bookmark.colorHue === undefined && !bookmark.categoryId }"
+    :class="{ 'no-color': hue === null }"
     :href="hasUrl ? bookmark.url : undefined"
     :target="hasUrl ? '_blank' : undefined"
     :rel="hasUrl ? 'noopener noreferrer' : undefined"
-    :style="{ '--c': hue }"
+    :style="hue !== null ? { '--c': hue } : {}"
   >
     <div class="card-thumb">
       <img

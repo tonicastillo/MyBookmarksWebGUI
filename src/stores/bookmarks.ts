@@ -122,10 +122,16 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
    * Aplica búsqueda y filtros por tags devolviendo grupos.
    * Un grupo coincide si el padre o cualquier hijo coincide con la query/tags.
    * Los hijos del grupo se mantienen completos (no se podan por la consulta).
+   *
+   * Si se proporciona `categoryIds`, el grupo debe pertenecer a una de esas
+   * categorías (mira `categoryId` del lead). Los bookmarks sin categoría
+   * quedan excluidos cuando hay filtro de categoría activo.
+   * `visibleAtStart` se ignora en este modo: incluye también los ocultos.
    */
-  const searchAndFilterGroups = (query: string, tags: string[]): BookmarkGroup[] => {
+  const searchAndFilterGroups = (query: string, tags: string[], categoryIds?: string[]): BookmarkGroup[] => {
     const q = query.toLowerCase().trim()
     const allGroups = groupBookmarksByParent(bookmarks.value)
+    const categorySet = categoryIds && categoryIds.length > 0 ? new Set(categoryIds) : null
 
     const matchesQuery = (b: Bookmark): boolean => {
       if (!q) return true
@@ -140,7 +146,13 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
       return tags.every(tag => b.tags.includes(tag))
     }
 
+    const matchesCategory = (g: BookmarkGroup): boolean => {
+      if (!categorySet) return true
+      return !!g.bookmark.categoryId && categorySet.has(g.bookmark.categoryId)
+    }
+
     return allGroups.filter(g => {
+      if (!matchesCategory(g)) return false
       const all = [g.bookmark, ...g.children]
       return all.some(b => matchesQuery(b) && matchesTags(b))
     })

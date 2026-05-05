@@ -1,118 +1,156 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { useCategoriesStore } from '@/stores/categories'
+import { VueDraggable } from 'vue-draggable-plus'
+import { useCategoriesStore, type CategoryNode } from '@/stores/categories'
 import { useBookmarksStore } from '@/stores/bookmarks'
-import type { Category } from '@/types'
+import CategoryTreeNode from '@/components/CategoryTreeNode.vue'
+import type { CategoryReorderEntry } from '@/api/notion'
 
 const router = useRouter()
 const categoriesStore = useCategoriesStore()
 const bookmarksStore = useBookmarksStore()
 
-interface RowDraft {
-  name: string
-  order: number
-  padreId: string
-  level: number | ''
-}
-
-const drafts = reactive<Record<string, RowDraft>>({})
-const dirty = ref<Set<string>>(new Set())
-const saving = ref<string | null>(null)
+const localTree = ref<CategoryNode[]>([])
+const isApplying = ref(false)
+const isSaving = ref(false)
 const errorMessage = ref<string | null>(null)
+const newName = ref('')
 
-const newCategory = reactive<RowDraft>({
-  name: '',
-  order: 0,
-  padreId: '',
-  level: ''
-})
+const cloneTree = (nodes: CategoryNode[]): CategoryNode[] =>
+  JSON.parse(JSON.stringify(nodes))
 
-const initDrafts = (categories: Category[]) => {
-  for (const c of categories) {
-    drafts[c.id] = {
-      name: c.name,
-      order: c.order,
-      padreId: c.padreId ?? '',
-      level: c.level ?? ''
-    }
-  }
+const syncFromStore = () => {
+  isApplying.value = true
+  localTree.value = cloneTree(categoriesStore.tree)
+  isApplying.value = false
 }
+
+watch(
+  () => categoriesStore.tree,
+  () => {
+    if (!isApplying.value) syncFromStore()
+  },
+  { deep: true }
+)
 
 onMounted(async () => {
   await Promise.all([
     categoriesStore.loadCategories(),
     bookmarksStore.loadBookmarks()
   ])
-  initDrafts(categoriesStore.orderedCategories)
+  syncFromStore()
 })
 
-const markDirty = (id: string) => {
-  dirty.value.add(id)
+const isDescendant = (nodeId: string, candidateId: string, nodes: CategoryNode[]): boolean => {
+  for (const n of nodes) {
+    if (n.id === nodeId) return containsId(n.children, candidateId)
+    if (isDescendant(nodeId, candidateId, n.children)) return true
+  }
+  return false
 }
 
-const handleSave = async (id: string) => {
-  const draft = drafts[id]
-  if (!draft) return
-  saving.value = id
+const containsId = (nodes: CategoryNode[], id: string): boolean => {
+  for (const n of nodes) {
+    if (n.id === id) return true
+    if (containsId(n.children, id)) return true
+  }
+  return false
+}
+
+const buildEntries = (): CategoryReorderEntry[] => {
+  const entries: CategoryReorderEntry[] = []
+  const walk = (nodes: CategoryNode[], padreId: string | null) => {
+    nodes.forEach((n, idx) => {
+      const prev = categoriesStore.getById(n.id)
+      const prevPadre = prev?.padreId ?? null
+      if (!prev || prev.order !== idx || prevPadre !== padreId) {
+        entries.push({ id: n.id, order: idx, padreId })
+      }
+      walk(n.children, n.id)
+    })
+  }
+  walk(localTree.value, null)
+  return entries
+}
+
+const onDragEnd = async () => {
+  if (isSaving.value) return
+
+  const entries = buildEntries()
+  if (entries.length === 0) return
+
+  for (const e of entries) {
+    if (e.padreId && isDescendant(e.id, e.padreId, localTree.value)) {
+      errorMessage.value = 'Movimiento inválido: una categoría no puede ser hija de su propio descendiente'
+      syncFromStore()
+      return
+    }
+  }
+
+  isSaving.value = true
   errorMessage.value = null
   try {
-    await categoriesStore.update(id, {
-      name: draft.name.trim(),
-      order: Number(draft.order),
-      padreId: draft.padreId || null,
-      level: draft.level === '' ? null : Number(draft.level)
-    })
-    dirty.value.delete(id)
+    await categoriesStore.reorderTree(entries)
   } catch (err) {
-    errorMessage.value = err instanceof Error ? err.message : 'Error guardando'
+    errorMessage.value = err instanceof Error ? err.message : 'Error reordenando'
+    syncFromStore()
   } finally {
-    saving.value = null
+    isSaving.value = false
   }
 }
 
-const handleDelete = async (id: string) => {
+const onRename = async (id: string, name: string) => {
+  errorMessage.value = null
+  try {
+    await categoriesStore.update(id, { name })
+  } catch (err) {
+    errorMessage.value = err instanceof Error ? err.message : 'Error renombrando'
+  }
+}
+
+const onRecolor = async (id: string, color: string | null) => {
+  errorMessage.value = null
+  try {
+    await categoriesStore.update(id, { color })
+  } catch (err) {
+    errorMessage.value = err instanceof Error ? err.message : 'Error guardando color'
+  }
+}
+
+const onDelete = async (id: string) => {
   const cat = categoriesStore.getById(id)
   const usedBy = bookmarksStore.bookmarks.filter(b => b.categoryId === id).length
   const message = usedBy > 0
     ? `"${cat?.name}" tiene ${usedBy} bookmarks asignados. Se quedarán sin categoría. ¿Continuar?`
     : `¿Borrar "${cat?.name}"?`
   if (!confirm(message)) return
+
   errorMessage.value = null
   try {
     await categoriesStore.remove(id)
-    delete drafts[id]
-    dirty.value.delete(id)
   } catch (err) {
     errorMessage.value = err instanceof Error ? err.message : 'Error borrando'
   }
 }
 
-const handleCreate = async () => {
-  if (!newCategory.name.trim()) return
-  saving.value = 'new'
+const onCreateRoot = async () => {
+  const name = newName.value.trim()
+  if (!name) return
+  isSaving.value = true
   errorMessage.value = null
   try {
-    const created = await categoriesStore.create({
-      name: newCategory.name.trim(),
-      order: Number(newCategory.order),
-      padreId: newCategory.padreId || null,
-      level: newCategory.level === '' ? null : Number(newCategory.level)
+    const rootCount = localTree.value.length
+    await categoriesStore.create({
+      name,
+      order: rootCount,
+      padreId: null
     })
-    drafts[created.id] = {
-      name: created.name,
-      order: created.order,
-      padreId: created.padreId ?? '',
-      level: created.level ?? ''
-    }
-    newCategory.name = ''
-    newCategory.order = 0
-    newCategory.padreId = ''
-    newCategory.level = ''
+    newName.value = ''
   } catch (err) {
     errorMessage.value = err instanceof Error ? err.message : 'Error creando'
   } finally {
-    saving.value = null
+    isSaving.value = false
   }
 }
 </script>
@@ -122,97 +160,66 @@ const handleCreate = async () => {
     <header class="header">
       <button class="back-btn" @click="router.push('/')">← Volver</button>
       <h1>Categorías</h1>
+      <p class="hint">Arrastra para reordenar o cambiar de padre.</p>
     </header>
 
     <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
 
-    <div class="table">
-      <div class="row head">
-        <div>Nombre</div>
-        <div>Orden</div>
-        <div>Padre</div>
-        <div>Nivel</div>
-        <div></div>
-      </div>
-
-      <div
-        v-for="c in categoriesStore.orderedCategories"
-        :key="c.id"
-        class="row"
-        :class="{ dirty: dirty.has(c.id) }"
+    <div class="tree" :class="{ saving: isSaving }">
+      <VueDraggable
+        v-model="localTree"
+        :animation="180"
+        :disabled="isSaving"
+        group="categories"
+        handle=".drag-handle"
+        ghost-class="drag-ghost"
+        chosen-class="drag-chosen"
+        :empty-insert-threshold="20"
+        @end="onDragEnd"
       >
-        <input
-          v-model="drafts[c.id].name"
-          type="text"
-          @input="markDirty(c.id)"
+        <CategoryTreeNode
+          v-for="node in localTree"
+          :key="node.id"
+          :node="node"
+          :busy="isSaving"
+          @rename="onRename"
+          @recolor="onRecolor"
+          @delete="onDelete"
+          @end="onDragEnd"
         />
-        <input
-          v-model.number="drafts[c.id].order"
-          type="number"
-          @input="markDirty(c.id)"
-        />
-        <select v-model="drafts[c.id].padreId" @change="markDirty(c.id)">
-          <option value="">— Sin padre —</option>
-          <option
-            v-for="p in categoriesStore.orderedCategories"
-            :key="p.id"
-            :value="p.id"
-            :disabled="p.id === c.id"
-          >
-            {{ p.name }}
-          </option>
-        </select>
-        <input
-          v-model="drafts[c.id].level"
-          type="number"
-          placeholder="—"
-          @input="markDirty(c.id)"
-        />
-        <div class="actions">
-          <button
-            class="btn btn-primary"
-            :disabled="!dirty.has(c.id) || saving === c.id"
-            @click="handleSave(c.id)"
-          >
-            {{ saving === c.id ? '…' : 'Guardar' }}
-          </button>
-          <button class="btn btn-danger" @click="handleDelete(c.id)">Borrar</button>
-        </div>
-      </div>
+      </VueDraggable>
 
-      <div class="row new">
-        <input v-model="newCategory.name" type="text" placeholder="Nueva categoría…" />
-        <input v-model.number="newCategory.order" type="number" placeholder="0" />
-        <select v-model="newCategory.padreId">
-          <option value="">— Sin padre —</option>
-          <option v-for="p in categoriesStore.orderedCategories" :key="p.id" :value="p.id">
-            {{ p.name }}
-          </option>
-        </select>
-        <input v-model="newCategory.level" type="number" placeholder="—" />
-        <div class="actions">
-          <button
-            class="btn btn-primary"
-            :disabled="!newCategory.name.trim() || saving === 'new'"
-            @click="handleCreate"
-          >
-            {{ saving === 'new' ? '…' : 'Añadir' }}
-          </button>
-        </div>
+      <div v-if="localTree.length === 0" class="empty">
+        Aún no hay categorías. Crea la primera abajo.
       </div>
+    </div>
+
+    <div class="add-row">
+      <input
+        v-model="newName"
+        type="text"
+        placeholder="Nueva categoría raíz…"
+        :disabled="isSaving"
+        @keydown.enter="onCreateRoot"
+      />
+      <button
+        class="btn btn-primary"
+        :disabled="!newName.trim() || isSaving"
+        @click="onCreateRoot"
+      >
+        Añadir
+      </button>
     </div>
   </div>
 </template>
 
 <style scoped>
 .cats-view {
-  max-width: 1080px;
+  max-width: 900px;
   margin: 0 auto;
   padding: 32px 24px 80px;
 }
-.header {
-  margin-bottom: 28px;
-}
+.header { margin-bottom: 24px; }
 .back-btn {
   font: inherit;
   font-size: 12px;
@@ -231,6 +238,11 @@ h1 {
   letter-spacing: -0.015em;
   color: var(--fg, #1c1a14);
 }
+.hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--fg-faint, #a8a294);
+}
 .error {
   background: rgba(184, 82, 72, 0.08);
   color: #b85248;
@@ -240,41 +252,34 @@ h1 {
   font-size: 13px;
 }
 
-.table {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
+.tree {
+  position: relative;
+  transition: opacity 0.15s;
 }
-.row {
-  display: grid;
-  grid-template-columns: 2fr 90px 2fr 80px auto;
-  gap: 8px;
-  padding: 8px 0;
-  align-items: center;
-  border-bottom: 0.5px solid var(--border, rgba(28, 26, 20, 0.06));
+.tree.saving {
+  opacity: 0.6;
+  pointer-events: none;
 }
-.row.head {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+.empty {
+  padding: 24px;
+  text-align: center;
   color: var(--fg-faint, #a8a294);
-  padding: 4px 0;
-}
-.row.dirty input,
-.row.dirty select {
-  border-color: var(--fg-mid, #4a463c);
-}
-.row.new {
-  border-top: 0.5px solid var(--border, rgba(28, 26, 20, 0.16));
-  margin-top: 8px;
-  padding-top: 12px;
+  font-size: 13px;
+  border: 0.5px dashed var(--border, rgba(28, 26, 20, 0.16));
+  border-radius: 8px;
 }
 
-.row input,
-.row select {
+.add-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 0.5px solid var(--border, rgba(28, 26, 20, 0.16));
+}
+.add-row input {
+  flex: 1;
   height: 30px;
-  padding: 0 8px;
+  padding: 0 10px;
   font: inherit;
   font-size: 13px;
   background: var(--bg-elev, #ffffff);
@@ -283,19 +288,11 @@ h1 {
   color: var(--fg, #1c1a14);
   outline: none;
 }
-.row input:focus,
-.row select:focus {
-  border-color: var(--fg-mid, #4a463c);
-}
+.add-row input:focus { border-color: var(--fg-mid, #4a463c); }
 
-.actions {
-  display: flex;
-  gap: 6px;
-  justify-content: flex-end;
-}
 .btn {
-  height: 28px;
-  padding: 0 10px;
+  height: 30px;
+  padding: 0 14px;
   border-radius: 6px;
   font: inherit;
   font-size: 12px;
@@ -310,10 +307,4 @@ h1 {
   border: 0;
 }
 .btn-primary:hover:not(:disabled) { background: var(--fg-mid, #4a463c); }
-.btn-danger {
-  background: transparent;
-  color: #b85248;
-  border: 0.5px solid rgba(184, 82, 72, 0.3);
-}
-.btn-danger:hover { background: rgba(184, 82, 72, 0.08); }
 </style>

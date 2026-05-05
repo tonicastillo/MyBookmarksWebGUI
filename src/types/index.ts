@@ -2,33 +2,32 @@ export interface Bookmark {
   id: string
   name: string
   url: string
-  alternateUrl?: string
   subtitle?: string
   tags: string[]
   categoryId?: string
   visibleAtStart: boolean
-  status: 'Not started' | 'In progress' | 'Done'
-  valoration?: '⭐' | '⭐⭐' | '⭐⭐⭐' | '⭐⭐⭐⭐' | '⭐⭐⭐⭐⭐'
   imageUrl?: string
-  createdTime: string
 
   // Mega card grouping (parent bookmark has no url; children reference parent.id)
   parentBookmarkId?: string
 
-  // Per-bookmark accent hue override (0–360). When absent, derived from category.
-  colorHue?: number
+  // Hex accent color (#rrggbb). When absent, derived from category or id hash.
+  color?: string | null
 
   // Inline site search: opens searchUrlTemplate.replace('{q}', encodeURIComponent(query)) in a new tab.
   searchPlaceholder?: string
   searchUrlTemplate?: string
+
+  // Generic JSON metadata for the resboard feature.
+  resboard?: Record<string, unknown> | null
 }
 
 export interface Category {
   id: string
   name: string
   order: number
-  level?: number
   padreId?: string
+  color?: string | null
   hijoIds?: string[]
 }
 

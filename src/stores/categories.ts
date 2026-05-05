@@ -6,9 +6,15 @@ import {
   createCategory as apiCreateCategory,
   updateCategory as apiUpdateCategory,
   deleteCategoryById as apiDeleteCategory,
-  type CategoryInput
+  reorderCategories as apiReorderCategories,
+  type CategoryInput,
+  type CategoryReorderEntry
 } from '@/api/notion'
 import { useCache } from '@/composables/useCache'
+
+export interface CategoryNode extends Category {
+  children: CategoryNode[]
+}
 
 const CACHE_KEY = 'categories'
 
@@ -25,6 +31,19 @@ export const useCategoriesStore = defineStore('categories', () => {
 
   const rootCategories = computed(() => {
     return orderedCategories.value.filter(c => !c.padreId)
+  })
+
+  const tree = computed<CategoryNode[]>(() => {
+    const byParent = new Map<string | null, Category[]>()
+    for (const c of orderedCategories.value) {
+      const key = c.padreId ?? null
+      const arr = byParent.get(key) ?? []
+      arr.push(c)
+      byParent.set(key, arr)
+    }
+    const build = (parentId: string | null): CategoryNode[] =>
+      (byParent.get(parentId) ?? []).map(c => ({ ...c, children: build(c.id) }))
+    return build(null)
   })
 
   const refreshing = ref(false)
@@ -99,6 +118,12 @@ export const useCategoriesStore = defineStore('categories', () => {
     removeLocal(id)
   }
 
+  const reorderTree = async (updates: CategoryReorderEntry[]): Promise<void> => {
+    const fresh = await apiReorderCategories(updates)
+    categories.value = fresh
+    saveToCache(CACHE_KEY, fresh)
+  }
+
   const invalidate = (): void => {
     clearCache(CACHE_KEY)
   }
@@ -110,12 +135,14 @@ export const useCategoriesStore = defineStore('categories', () => {
     error,
     orderedCategories,
     rootCategories,
+    tree,
     loadCategories,
     getById,
     getChildren,
     create,
     update,
     remove,
+    reorderTree,
     invalidate
   }
 })

@@ -1,34 +1,33 @@
 import type { Bookmark } from '@/types'
 
-/**
- * Hash determinista (FNV-1a 32-bit) → entero positivo.
- */
-const hashString = (input: string): number => {
-  let h = 0x811c9dc5
-  for (let i = 0; i < input.length; i++) {
-    h ^= input.charCodeAt(i)
-    h = Math.imul(h, 0x01000193)
-  }
-  return h >>> 0
+const HEX_RE = /^#([0-9a-fA-F]{6})$/
+
+export const hueFromHex = (hex: string | null | undefined): number | null => {
+  if (!hex) return null
+  const match = HEX_RE.exec(hex)
+  if (!match) return null
+  const num = parseInt(match[1], 16)
+  const r = ((num >> 16) & 0xff) / 255
+  const g = ((num >> 8) & 0xff) / 255
+  const b = (num & 0xff) / 255
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const delta = max - min
+  if (delta === 0) return 0
+  let h = 0
+  if (max === r) h = ((g - b) / delta) % 6
+  else if (max === g) h = (b - r) / delta + 2
+  else h = (r - g) / delta + 4
+  h = Math.round(h * 60)
+  if (h < 0) h += 360
+  return h
 }
 
-/**
- * Genera una tonalidad estable (0–360) a partir de un id arbitrario.
- * Mismo id ⇒ misma tonalidad.
- */
-export const hueFromId = (id: string | undefined | null): number => {
-  if (!id) return 220
-  return hashString(id) % 360
-}
-
-/**
- * Resuelve la tonalidad efectiva de un bookmark:
- * 1. Override explícito en `colorHue`.
- * 2. Derivada de la categoría.
- * 3. Fallback derivado del propio id.
- */
-export const resolveBookmarkHue = (bookmark: Bookmark): number => {
-  if (typeof bookmark.colorHue === 'number') return bookmark.colorHue
-  if (bookmark.categoryId) return hueFromId(bookmark.categoryId)
-  return hueFromId(bookmark.id)
+export const resolveBookmarkHue = (
+  bookmark: Bookmark,
+  categoryColor?: string | null,
+): number | null => {
+  const fromBookmarkColor = hueFromHex(bookmark.color)
+  if (fromBookmarkColor !== null) return fromBookmarkColor
+  return hueFromHex(categoryColor)
 }

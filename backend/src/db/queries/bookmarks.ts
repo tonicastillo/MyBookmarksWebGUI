@@ -5,19 +5,16 @@ interface BookmarkRow {
   id: string
   name: string
   url: string | null
-  alternate_url: string | null
   subtitle: string | null
   category_id: string | null
   parent_bookmark_id: string | null
   visible_at_start: number
-  status: string
-  valoration: string | null
-  color_hue: number | null
+  color: string | null
   search_placeholder: string | null
   search_url_template: string | null
   image_filename: string | null
   image_url: string | null
-  created_at: string
+  resboard: string | null
 }
 
 const buildImageUrl = (row: BookmarkRow): string | undefined => {
@@ -27,23 +24,33 @@ const buildImageUrl = (row: BookmarkRow): string | undefined => {
   return undefined
 }
 
+const parseResboard = (raw: string | null): Record<string, unknown> | undefined => {
+  if (!raw) return undefined
+  try {
+    const parsed = JSON.parse(raw)
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>
+    }
+    return undefined
+  } catch {
+    return undefined
+  }
+}
+
 const rowToBookmark = (row: BookmarkRow, tagsByBookmark: Map<string, string[]>): Bookmark => ({
   id: row.id,
   name: row.name,
   url: row.url ?? '',
-  alternateUrl: row.alternate_url ?? undefined,
   subtitle: row.subtitle ?? undefined,
   tags: tagsByBookmark.get(row.id) ?? [],
   categoryId: row.category_id ?? undefined,
   visibleAtStart: row.visible_at_start === 1,
-  status: row.status as Bookmark['status'],
-  valoration: row.valoration as Bookmark['valoration'] | undefined ?? undefined,
   imageUrl: buildImageUrl(row),
-  createdTime: row.created_at,
   parentBookmarkId: row.parent_bookmark_id ?? undefined,
-  colorHue: row.color_hue ?? undefined,
+  color: row.color ?? undefined,
   searchPlaceholder: row.search_placeholder ?? undefined,
-  searchUrlTemplate: row.search_url_template ?? undefined
+  searchUrlTemplate: row.search_url_template ?? undefined,
+  resboard: parseResboard(row.resboard)
 })
 
 const loadTagsByBookmark = (): Map<string, string[]> => {
@@ -78,18 +85,21 @@ export const getBookmarkById = (id: string): Bookmark | undefined => {
 export interface BookmarkInput {
   name: string
   url?: string | null
-  alternateUrl?: string | null
   subtitle?: string | null
   categoryId?: string | null
   parentBookmarkId?: string | null
   visibleAtStart?: boolean
-  status?: Bookmark['status']
-  valoration?: string | null
-  colorHue?: number | null
+  color?: string | null
   searchPlaceholder?: string | null
   searchUrlTemplate?: string | null
   imageUrl?: string | null
   tags?: string[]
+  resboard?: Record<string, unknown> | null
+}
+
+const serializeResboard = (value: BookmarkInput['resboard']): string | null => {
+  if (value === null || value === undefined) return null
+  return JSON.stringify(value)
 }
 
 const upsertTags = (bookmarkId: string, tags: string[]): void => {
@@ -111,29 +121,27 @@ export const insertBookmark = (id: string, input: BookmarkInput): Bookmark => {
   const tx = db.transaction(() => {
     db.prepare(`
       INSERT INTO bookmarks (
-        id, name, url, alternate_url, subtitle, category_id, parent_bookmark_id,
-        visible_at_start, status, valoration, color_hue,
-        search_placeholder, search_url_template, image_url
+        id, name, url, subtitle, category_id, parent_bookmark_id,
+        visible_at_start, color,
+        search_placeholder, search_url_template, image_url, resboard
       ) VALUES (
-        @id, @name, @url, @alternateUrl, @subtitle, @categoryId, @parentBookmarkId,
-        @visibleAtStart, @status, @valoration, @colorHue,
-        @searchPlaceholder, @searchUrlTemplate, @imageUrl
+        @id, @name, @url, @subtitle, @categoryId, @parentBookmarkId,
+        @visibleAtStart, @color,
+        @searchPlaceholder, @searchUrlTemplate, @imageUrl, @resboard
       )
     `).run({
       id,
       name: input.name,
       url: input.url ?? null,
-      alternateUrl: input.alternateUrl ?? null,
       subtitle: input.subtitle ?? null,
       categoryId: input.categoryId ?? null,
       parentBookmarkId: input.parentBookmarkId ?? null,
       visibleAtStart: input.visibleAtStart ? 1 : 0,
-      status: input.status ?? 'Not started',
-      valoration: input.valoration ?? null,
-      colorHue: input.colorHue ?? null,
+      color: input.color ?? null,
       searchPlaceholder: input.searchPlaceholder ?? null,
       searchUrlTemplate: input.searchUrlTemplate ?? null,
-      imageUrl: input.imageUrl ?? null
+      imageUrl: input.imageUrl ?? null,
+      resboard: serializeResboard(input.resboard)
     })
 
     if (input.tags) upsertTags(id, input.tags)
@@ -157,17 +165,15 @@ export const updateBookmark = (id: string, input: Partial<BookmarkInput>): Bookm
 
   if (input.name !== undefined) setField('name', 'name', input.name)
   if (input.url !== undefined) setField('url', 'url', input.url ?? null)
-  if (input.alternateUrl !== undefined) setField('alternate_url', 'alternateUrl', input.alternateUrl ?? null)
   if (input.subtitle !== undefined) setField('subtitle', 'subtitle', input.subtitle ?? null)
   if (input.categoryId !== undefined) setField('category_id', 'categoryId', input.categoryId ?? null)
   if (input.parentBookmarkId !== undefined) setField('parent_bookmark_id', 'parentBookmarkId', input.parentBookmarkId ?? null)
   if (input.visibleAtStart !== undefined) setField('visible_at_start', 'visibleAtStart', input.visibleAtStart ? 1 : 0)
-  if (input.status !== undefined) setField('status', 'status', input.status)
-  if (input.valoration !== undefined) setField('valoration', 'valoration', input.valoration ?? null)
-  if (input.colorHue !== undefined) setField('color_hue', 'colorHue', input.colorHue ?? null)
+  if (input.color !== undefined) setField('color', 'color', input.color ?? null)
   if (input.searchPlaceholder !== undefined) setField('search_placeholder', 'searchPlaceholder', input.searchPlaceholder ?? null)
   if (input.searchUrlTemplate !== undefined) setField('search_url_template', 'searchUrlTemplate', input.searchUrlTemplate ?? null)
   if (input.imageUrl !== undefined) setField('image_url', 'imageUrl', input.imageUrl ?? null)
+  if (input.resboard !== undefined) setField('resboard', 'resboard', serializeResboard(input.resboard))
 
   const tx = db.transaction(() => {
     if (fields.length > 0) {

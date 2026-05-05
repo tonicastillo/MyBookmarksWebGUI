@@ -3,14 +3,21 @@ import type { Bookmark } from '@/types'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { resolveBookmarkHue } from '@/composables/useColorHue'
+import { useCategoriesStore } from '@/stores/categories'
 
 const router = useRouter()
+const categoriesStore = useCategoriesStore()
 
 const props = defineProps<{
   bookmark: Bookmark
 }>()
 
-const hue = computed(() => resolveBookmarkHue(props.bookmark))
+const hue = computed(() => {
+  const cat = props.bookmark.categoryId
+    ? categoriesStore.getById(props.bookmark.categoryId)
+    : null
+  return resolveBookmarkHue(props.bookmark, cat?.color)
+})
 const hasUrl = computed(() => Boolean(props.bookmark.url))
 const hasSearch = computed(() => Boolean(props.bookmark.searchUrlTemplate))
 
@@ -59,8 +66,8 @@ const rowTag = computed(() => (hasUrl.value ? 'a' : 'div'))
   <div
     v-if="hasSearch"
     class="minicard has-search"
-    :class="{ 'no-color': bookmark.colorHue === undefined && !bookmark.categoryId }"
-    :style="{ '--c': hue }"
+    :class="{ 'no-color': hue === null }"
+    :style="hue !== null ? { '--c': hue } : {}"
   >
     <component
       :is="rowTag"
@@ -107,8 +114,8 @@ const rowTag = computed(() => (hasUrl.value ? 'a' : 'div'))
     :target="hasUrl ? '_blank' : undefined"
     :rel="hasUrl ? 'noopener noreferrer' : undefined"
     class="minicard"
-    :class="{ 'no-color': bookmark.colorHue === undefined && !bookmark.categoryId }"
-    :style="{ '--c': hue }"
+    :class="{ 'no-color': hue === null }"
+    :style="hue !== null ? { '--c': hue } : {}"
   >
     <div class="minicard-thumb">
       <img v-if="bookmark.imageUrl" :src="bookmark.imageUrl" :alt="bookmark.name" loading="lazy" />

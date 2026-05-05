@@ -34,9 +34,36 @@ const ALLOWED_MIME: Record<string, string> = {
   'image/avif': 'avif'
 }
 
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/
+
 const sendError = (res: Parameters<Parameters<typeof router.get>[1]>[1], status: number, message: string) => {
   const response: ApiResponse<null> = { success: false, data: null, error: message }
   res.status(status).json(response)
+}
+
+const validateColor = (color: unknown): string | null | undefined => {
+  if (color === undefined) return undefined
+  if (color === null) return null
+  if (typeof color === 'string' && HEX_COLOR_RE.test(color)) return color
+  throw new Error('color debe ser hex #rrggbb o null')
+}
+
+const validateResboard = (value: unknown): Record<string, unknown> | null | undefined => {
+  if (value === undefined) return undefined
+  if (value === null) return null
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('resboard debe ser un objeto JSON o null')
+  }
+  return value as Record<string, unknown>
+}
+
+const sanitizeBookmarkInput = (input: BookmarkInput): BookmarkInput => {
+  const color = validateColor(input.color)
+  const resboard = validateResboard(input.resboard)
+  const patch: BookmarkInput = { ...input }
+  if (color !== undefined) patch.color = color
+  if (resboard !== undefined) patch.resboard = resboard
+  return patch
 }
 
 router.get('/', (_req, res) => {
@@ -73,25 +100,27 @@ router.post('/', (req, res) => {
     if (!input?.name || typeof input.name !== 'string') {
       return sendError(res, 400, 'name es obligatorio')
     }
+    const sanitized = sanitizeBookmarkInput(input)
     const id = nanoid()
-    const bookmark = insertBookmark(id, input)
+    const bookmark = insertBookmark(id, sanitized)
     const response: ApiResponse<Bookmark> = { success: true, data: bookmark }
     res.status(201).json(response)
   } catch (err) {
     console.error(err)
-    sendError(res, 500, err instanceof Error ? err.message : 'Unknown error')
+    sendError(res, 400, err instanceof Error ? err.message : 'Unknown error')
   }
 })
 
 router.put('/:id', (req, res) => {
   try {
-    const bookmark = updateBookmark(req.params.id, req.body as Partial<BookmarkInput>)
+    const sanitized = sanitizeBookmarkInput(req.body as BookmarkInput)
+    const bookmark = updateBookmark(req.params.id, sanitized)
     if (!bookmark) return sendError(res, 404, 'Bookmark no encontrado')
     const response: ApiResponse<Bookmark> = { success: true, data: bookmark }
     res.json(response)
   } catch (err) {
     console.error(err)
-    sendError(res, 500, err instanceof Error ? err.message : 'Unknown error')
+    sendError(res, 400, err instanceof Error ? err.message : 'Unknown error')
   }
 })
 

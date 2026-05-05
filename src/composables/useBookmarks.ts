@@ -36,8 +36,8 @@ export const useBookmarks = () => {
   }
 
   /** Modo filtrado: lista plana de grupos (mega cards + sueltos). */
-  const getFilteredGroups = (query: string, tags: string[]): BookmarkGroup[] => {
-    return bookmarksStore.searchAndFilterGroups(query, tags)
+  const getFilteredGroups = (query: string, tags: string[], categoryIds?: string[]): BookmarkGroup[] => {
+    return bookmarksStore.searchAndFilterGroups(query, tags, categoryIds)
   }
 
   return {
