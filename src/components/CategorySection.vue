@@ -78,4 +78,11 @@ const handleTagClick = (tag: string) => {
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 12px;
 }
+
+@media (max-width: 480px) {
+  .cards {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px;
+  }
+}
 </style>

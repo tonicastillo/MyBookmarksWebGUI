@@ -13,6 +13,19 @@ const bookmarksStore = useBookmarksStore()
 const categoriesStore = useCategoriesStore()
 const { categoryFilter, setFilter } = useCategoryFilter()
 
+defineProps<{
+  open?: boolean
+}>()
+
+const emit = defineEmits<{
+  navigate: []
+}>()
+
+const goTo = (path: string) => {
+  router.push(path)
+  emit('navigate')
+}
+
 // Mapa id → ids de todos sus descendientes (subcategorías recursivas).
 const descendantMap = computed(() => {
   const childrenOf = new Map<string, string[]>()
@@ -184,23 +197,27 @@ const handleClick = (id: string, event: MouseEvent) => {
   event.preventDefault()
   activeId.value = id
   fastScrollTo(target)
+  emit('navigate')
 }
 
 const applyAllInCategory = (parentId: string, parentName: string) => {
   const ids = [parentId, ...(descendantMap.value.get(parentId) ?? [])]
   setFilter(ids, parentName)
   expandedId.value = null
+  emit('navigate')
 }
 
 const applyMainOnly = (parentId: string, parentName: string) => {
   setFilter([parentId], `${parentName} · solo principal`)
   expandedId.value = null
+  emit('navigate')
 }
 
 const applySubcategory = (subId: string, subName: string) => {
   const ids = [subId, ...(descendantMap.value.get(subId) ?? [])]
   setFilter(ids, subName)
   expandedId.value = null
+  emit('navigate')
 }
 
 const isFilterActiveForIds = (ids: string[]): boolean => {
@@ -213,17 +230,17 @@ const isFilterActiveForIds = (ids: string[]): boolean => {
 </script>
 
 <template>
-  <aside class="sidebar">
+  <aside class="sidebar" :class="{ 'is-open': open }">
     <div class="brand">
       <div class="brand-logo">M</div>
       <div class="brand-name">MyBookmarks</div>
     </div>
 
     <div class="quick-actions">
-      <button class="quick-btn primary" @click="router.push('/edit')">
+      <button class="quick-btn primary" @click="goTo('/edit')">
         + Nuevo bookmark
       </button>
-      <button class="quick-btn" @click="router.push('/categories')">
+      <button class="quick-btn" @click="goTo('/categories')">
         Gestionar categorías
       </button>
     </div>
@@ -326,6 +343,26 @@ const isFilterActiveForIds = (ids: string[]): boolean => {
   top: 0;
   height: 100vh;
   overflow-y: auto;
+}
+
+@media (max-width: 900px) {
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    height: 100dvh;
+    width: 280px;
+    max-width: 86vw;
+    padding-top: 56px;
+    z-index: 50;
+    transform: translateX(-100%);
+    transition: transform 220ms ease;
+    box-shadow: 4px 0 24px rgba(28, 26, 20, 0.12);
+  }
+  .sidebar.is-open {
+    transform: translateX(0);
+  }
 }
 
 .brand {

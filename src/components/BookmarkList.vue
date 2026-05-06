@@ -48,4 +48,11 @@ const totalCount = () => props.groups.reduce((acc, g) => acc + 1 + g.children.le
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 12px;
 }
+
+@media (max-width: 480px) {
+  .cards {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px;
+  }
+}
 </style>

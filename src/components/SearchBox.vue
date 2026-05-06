@@ -150,4 +150,16 @@ onUnmounted(() => {
   background: var(--bg-soft, #f3f1ec);
   color: var(--fg, #1c1a14);
 }
+
+@media (max-width: 600px) {
+  .kbd {
+    display: none;
+  }
+  .search {
+    padding: 0 10px 0 12px;
+  }
+  .search input {
+    font-size: 16px;
+  }
+}
 </style>

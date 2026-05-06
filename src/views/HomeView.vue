@@ -430,6 +430,35 @@ onUnmounted(() => {
   border-radius: 14px;
 }
 
+@media (max-width: 600px) {
+  .toolbar-row {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .search-wrap {
+    flex: 1 1 100%;
+    order: -1;
+  }
+  .tags-btn {
+    height: 40px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+  .tags-btn span:not(.tags-badge) {
+    display: none;
+  }
+  .refresh-btn {
+    width: 40px;
+    height: 40px;
+  }
+  .sync-text {
+    display: none;
+  }
+  .tags-panel {
+    padding: 14px;
+  }
+}
+
 .categories {
   display: flex;
   flex-direction: column;
