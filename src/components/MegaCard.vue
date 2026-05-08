@@ -25,7 +25,26 @@ const hue = computed(() => {
     : null
   return resolveBookmarkHue(props.parent, cat?.color)
 })
-const hasSearch = computed(() => Boolean(props.parent.searchUrlTemplate))
+
+const childrenWithSearch = computed(() =>
+  props.children.filter(child => Boolean(child.searchUrlTemplate)),
+)
+
+const searchMode = computed<'parent' | 'children' | 'none'>(() => {
+  if (props.parent.searchUrlTemplate) return 'parent'
+  if (childrenWithSearch.value.length >= 2) return 'children'
+  return 'none'
+})
+
+const hasSearch = computed(() => searchMode.value !== 'none')
+
+const searchPlaceholder = computed(() => {
+  if (props.parent.searchPlaceholder) return props.parent.searchPlaceholder
+  if (searchMode.value === 'children') {
+    return `Buscar en ${childrenWithSearch.value.length} sites a la vez…`
+  }
+  return 'Buscar en el grupo…'
+})
 
 const imageStyle = computed(() => buildImageStyle(props.parent))
 
@@ -47,10 +66,23 @@ const searchQuery = ref('')
 const handleSearchSubmit = (event: Event) => {
   event.preventDefault()
   event.stopPropagation()
-  const tpl = props.parent.searchUrlTemplate
   const q = searchQuery.value.trim()
-  if (!tpl || !q) return
-  window.open(tpl.replace('{q}', encodeURIComponent(q)), '_blank', 'noopener,noreferrer')
+  if (!q) return
+
+  if (searchMode.value === 'parent') {
+    const tpl = props.parent.searchUrlTemplate
+    if (!tpl) return
+    window.open(tpl.replace('{q}', encodeURIComponent(q)), '_blank', 'noopener,noreferrer')
+    return
+  }
+
+  if (searchMode.value === 'children') {
+    childrenWithSearch.value.forEach(child => {
+      const tpl = child.searchUrlTemplate
+      if (!tpl) return
+      window.open(tpl.replace('{q}', encodeURIComponent(q)), '_blank', 'noopener,noreferrer')
+    })
+  }
 }
 
 const handleTagClick = (tag: string) => {
@@ -92,14 +124,14 @@ const handleTagClick = (tag: string) => {
       <input
         v-model="searchQuery"
         type="text"
-        :placeholder="parent.searchPlaceholder || 'Buscar en el grupo…'"
+        :placeholder="searchPlaceholder"
       />
       <button type="submit">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="11" cy="11" r="7" />
           <path d="m21 21-4.3-4.3" />
         </svg>
-        Buscar
+        {{ searchMode === 'children' ? `Buscar en ${childrenWithSearch.length}` : 'Buscar' }}
       </button>
     </form>
 
