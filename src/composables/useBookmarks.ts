@@ -1,6 +1,6 @@
 import { computed } from 'vue'
 import { useBookmarksStore } from '@/stores/bookmarks'
-import { useCategoriesStore } from '@/stores/categories'
+import { useCategoriesStore, type CategoryNode } from '@/stores/categories'
 import type { Category } from '@/types'
 import type { BookmarkGroup } from '@/composables/useBookmarkGroups'
 
@@ -25,14 +25,22 @@ export const useBookmarks = () => {
     ])
   }
 
-  /** Modo inicial: agrupado por categoría con mega cards y sueltos. */
+  /** Modo inicial: agrupado por categoría con mega cards y sueltos.
+   *  Recorre el árbol en pre-orden para que cada padre vaya seguido
+   *  de sus hijos (los `order` de los hijos son relativos a su padre). */
   const getCategoriesWithVisibleGroups = (): CategoryWithGroups[] => {
-    return categoriesStore.orderedCategories
-      .map(category => ({
-        category,
-        groups: bookmarksStore.getVisibleGroupsByCategory(category.id)
-      }))
-      .filter(item => item.groups.length > 0)
+    const result: CategoryWithGroups[] = []
+    const walk = (nodes: CategoryNode[]) => {
+      for (const node of nodes) {
+        const groups = bookmarksStore.getVisibleGroupsByCategory(node.id)
+        if (groups.length > 0) {
+          result.push({ category: node, groups })
+        }
+        walk(node.children)
+      }
+    }
+    walk(categoriesStore.tree)
+    return result
   }
 
   /** Modo filtrado: lista plana de grupos (mega cards + sueltos). */

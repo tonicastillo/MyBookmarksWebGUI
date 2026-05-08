@@ -6,11 +6,15 @@ export interface Bookmark {
   tags: string[]
   categoryId?: string
   visibleAtStart: boolean
+  isMegaCard: boolean
   imageUrl?: string
   parentBookmarkId?: string
   color?: string | null
   searchPlaceholder?: string
   searchUrlTemplate?: string
+  imageScale?: number | null
+  imageBgColor?: string | null
+  imageBgColor2?: string | null
   resboard?: Record<string, unknown> | null
 }
 

@@ -35,6 +35,7 @@ const ALLOWED_MIME: Record<string, string> = {
 }
 
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/
+const CSS_COLOR_RE = /^(#[0-9a-fA-F]{3,8}|rgb\([^)]+\)|rgba\([^)]+\)|hsl\([^)]+\)|hsla\([^)]+\))$/
 
 const sendError = (res: Parameters<Parameters<typeof router.get>[1]>[1], status: number, message: string) => {
   const response: ApiResponse<null> = { success: false, data: null, error: message }
@@ -46,6 +47,25 @@ const validateColor = (color: unknown): string | null | undefined => {
   if (color === null) return null
   if (typeof color === 'string' && HEX_COLOR_RE.test(color)) return color
   throw new Error('color debe ser hex #rrggbb o null')
+}
+
+const validateBgColor = (value: unknown): string | null | undefined => {
+  if (value === undefined) return undefined
+  if (value === null || value === '') return null
+  if (typeof value === 'string' && CSS_COLOR_RE.test(value.trim())) return value.trim()
+  throw new Error('color de fondo debe ser hex, rgb(a) o hsl(a)')
+}
+
+const validateScale = (value: unknown): number | null | undefined => {
+  if (value === undefined) return undefined
+  if (value === null) return null
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error('image_scale debe ser numérico')
+  }
+  if (value < 0.5 || value > 1) {
+    throw new Error('image_scale debe estar entre 0.5 y 1')
+  }
+  return value
 }
 
 const validateResboard = (value: unknown): Record<string, unknown> | null | undefined => {
@@ -60,9 +80,16 @@ const validateResboard = (value: unknown): Record<string, unknown> | null | unde
 const sanitizeBookmarkInput = (input: BookmarkInput): BookmarkInput => {
   const color = validateColor(input.color)
   const resboard = validateResboard(input.resboard)
+  const imageScale = validateScale(input.imageScale)
+  const imageBgColor = validateBgColor(input.imageBgColor)
+  const imageBgColor2 = validateBgColor(input.imageBgColor2)
   const patch: BookmarkInput = { ...input }
   if (color !== undefined) patch.color = color
   if (resboard !== undefined) patch.resboard = resboard
+  if (imageScale !== undefined) patch.imageScale = imageScale
+  if (imageBgColor !== undefined) patch.imageBgColor = imageBgColor
+  if (imageBgColor2 !== undefined) patch.imageBgColor2 = imageBgColor2
+  if (patch.isMegaCard === true) patch.parentBookmarkId = null
   return patch
 }
 

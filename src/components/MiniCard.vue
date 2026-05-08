@@ -4,6 +4,7 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { resolveBookmarkHue } from '@/composables/useColorHue'
 import { useCategoriesStore } from '@/stores/categories'
+import { buildImageStyle } from '@/composables/useImageStyle'
 
 const router = useRouter()
 const categoriesStore = useCategoriesStore()
@@ -60,6 +61,8 @@ const stop = (event: Event) => {
 }
 
 const rowTag = computed(() => (hasUrl.value ? 'a' : 'div'))
+
+const imageStyle = computed(() => buildImageStyle(props.bookmark))
 </script>
 
 <template>
@@ -76,8 +79,8 @@ const rowTag = computed(() => (hasUrl.value ? 'a' : 'div'))
       :rel="hasUrl ? 'noopener noreferrer' : undefined"
       class="minicard-row"
     >
-      <div class="minicard-thumb">
-        <img v-if="bookmark.imageUrl" :src="bookmark.imageUrl" :alt="bookmark.name" loading="lazy" />
+      <div class="minicard-thumb" :style="imageStyle.thumb">
+        <img v-if="bookmark.imageUrl" :src="bookmark.imageUrl" :alt="bookmark.name" loading="lazy" :style="imageStyle.img" />
         <span v-else>{{ initials }}</span>
       </div>
       <div class="minicard-body">
@@ -117,8 +120,8 @@ const rowTag = computed(() => (hasUrl.value ? 'a' : 'div'))
     :class="{ 'no-color': hue === null }"
     :style="hue !== null ? { '--c': hue } : {}"
   >
-    <div class="minicard-thumb">
-      <img v-if="bookmark.imageUrl" :src="bookmark.imageUrl" :alt="bookmark.name" loading="lazy" />
+    <div class="minicard-thumb" :style="imageStyle.thumb">
+      <img v-if="bookmark.imageUrl" :src="bookmark.imageUrl" :alt="bookmark.name" loading="lazy" :style="imageStyle.img" />
       <span v-else>{{ initials }}</span>
     </div>
     <div class="minicard-body">

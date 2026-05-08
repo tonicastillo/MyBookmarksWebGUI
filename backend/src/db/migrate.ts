@@ -20,11 +20,15 @@ CREATE TABLE IF NOT EXISTS bookmarks (
   category_id           TEXT REFERENCES categories(id) ON DELETE SET NULL,
   parent_bookmark_id    TEXT REFERENCES bookmarks(id) ON DELETE CASCADE,
   visible_at_start      INTEGER NOT NULL DEFAULT 0,
+  is_mega_card          INTEGER NOT NULL DEFAULT 0,
   color                 TEXT,
   search_placeholder    TEXT,
   search_url_template   TEXT,
   image_filename        TEXT,
   image_url             TEXT,
+  image_scale           REAL,
+  image_bg_color        TEXT,
+  image_bg_color2       TEXT,
   resboard              TEXT,
   created_at            TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
@@ -117,6 +121,34 @@ const MIGRATIONS: Migration[] = [
       }
       if (!hasColumn(database, 'bookmarks', 'resboard')) {
         database.exec(`ALTER TABLE bookmarks ADD COLUMN resboard TEXT`)
+      }
+    }
+  },
+  {
+    version: 3,
+    up: (database) => {
+      if (!hasColumn(database, 'bookmarks', 'is_mega_card')) {
+        database.exec(`ALTER TABLE bookmarks ADD COLUMN is_mega_card INTEGER NOT NULL DEFAULT 0`)
+      }
+      database.exec(`
+        UPDATE bookmarks
+           SET is_mega_card = 1
+         WHERE id IN (SELECT DISTINCT parent_bookmark_id FROM bookmarks WHERE parent_bookmark_id IS NOT NULL)
+      `)
+      database.exec(`CREATE INDEX IF NOT EXISTS idx_bookmarks_mega ON bookmarks(is_mega_card) WHERE is_mega_card = 1`)
+    }
+  },
+  {
+    version: 4,
+    up: (database) => {
+      if (!hasColumn(database, 'bookmarks', 'image_scale')) {
+        database.exec(`ALTER TABLE bookmarks ADD COLUMN image_scale REAL`)
+      }
+      if (!hasColumn(database, 'bookmarks', 'image_bg_color')) {
+        database.exec(`ALTER TABLE bookmarks ADD COLUMN image_bg_color TEXT`)
+      }
+      if (!hasColumn(database, 'bookmarks', 'image_bg_color2')) {
+        database.exec(`ALTER TABLE bookmarks ADD COLUMN image_bg_color2 TEXT`)
       }
     }
   }

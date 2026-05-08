@@ -4,6 +4,7 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { resolveBookmarkHue } from '@/composables/useColorHue'
 import { useCategoriesStore } from '@/stores/categories'
+import { buildImageStyle } from '@/composables/useImageStyle'
 import MiniCard from './MiniCard.vue'
 
 const router = useRouter()
@@ -25,6 +26,8 @@ const hue = computed(() => {
   return resolveBookmarkHue(props.parent, cat?.color)
 })
 const hasSearch = computed(() => Boolean(props.parent.searchUrlTemplate))
+
+const imageStyle = computed(() => buildImageStyle(props.parent))
 
 const initials = computed(() => {
   const trimmed = props.parent.name.trim()
@@ -62,12 +65,13 @@ const handleTagClick = (tag: string) => {
     :style="hue !== null ? { '--c': hue } : {}"
   >
     <div class="megacard-head">
-      <div class="card-thumb mega-thumb">
+      <div class="card-thumb mega-thumb" :style="imageStyle.thumb">
         <img
           v-if="parent.imageUrl"
           :src="parent.imageUrl"
           :alt="parent.name"
           loading="lazy"
+          :style="imageStyle.img"
         />
         <span v-else class="card-thumb-text">{{ initials }}</span>
       </div>

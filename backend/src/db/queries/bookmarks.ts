@@ -9,17 +9,33 @@ interface BookmarkRow {
   category_id: string | null
   parent_bookmark_id: string | null
   visible_at_start: number
+  is_mega_card: number
   color: string | null
   search_placeholder: string | null
   search_url_template: string | null
   image_filename: string | null
   image_url: string | null
+  image_scale: number | null
+  image_bg_color: string | null
+  image_bg_color2: string | null
   resboard: string | null
+  updated_at: string | null
+}
+
+const cacheBuster = (updatedAt: string | null): string => {
+  if (!updatedAt) return ''
+  const ts = Date.parse(updatedAt + 'Z')
+  return Number.isFinite(ts) ? String(Math.floor(ts / 1000)) : ''
 }
 
 const buildImageUrl = (row: BookmarkRow): string | undefined => {
-  const base = process.env.PUBLIC_BASE_URL ?? ''
-  if (row.image_filename) return `${base}/images/${row.image_filename}`
+  const base = (process.env.PUBLIC_BASE_URL ?? '').replace(/\/+$/, '')
+  if (row.image_filename) {
+    const v = cacheBuster(row.updated_at)
+    return v
+      ? `${base}/images/${row.image_filename}?v=${v}`
+      : `${base}/images/${row.image_filename}`
+  }
   if (row.image_url) return row.image_url
   return undefined
 }
@@ -45,11 +61,15 @@ const rowToBookmark = (row: BookmarkRow, tagsByBookmark: Map<string, string[]>):
   tags: tagsByBookmark.get(row.id) ?? [],
   categoryId: row.category_id ?? undefined,
   visibleAtStart: row.visible_at_start === 1,
+  isMegaCard: row.is_mega_card === 1,
   imageUrl: buildImageUrl(row),
   parentBookmarkId: row.parent_bookmark_id ?? undefined,
   color: row.color ?? undefined,
   searchPlaceholder: row.search_placeholder ?? undefined,
   searchUrlTemplate: row.search_url_template ?? undefined,
+  imageScale: row.image_scale ?? undefined,
+  imageBgColor: row.image_bg_color ?? undefined,
+  imageBgColor2: row.image_bg_color2 ?? undefined,
   resboard: parseResboard(row.resboard)
 })
 
@@ -89,10 +109,14 @@ export interface BookmarkInput {
   categoryId?: string | null
   parentBookmarkId?: string | null
   visibleAtStart?: boolean
+  isMegaCard?: boolean
   color?: string | null
   searchPlaceholder?: string | null
   searchUrlTemplate?: string | null
   imageUrl?: string | null
+  imageScale?: number | null
+  imageBgColor?: string | null
+  imageBgColor2?: string | null
   tags?: string[]
   resboard?: Record<string, unknown> | null
 }
@@ -122,12 +146,14 @@ export const insertBookmark = (id: string, input: BookmarkInput): Bookmark => {
     db.prepare(`
       INSERT INTO bookmarks (
         id, name, url, subtitle, category_id, parent_bookmark_id,
-        visible_at_start, color,
-        search_placeholder, search_url_template, image_url, resboard
+        visible_at_start, is_mega_card, color,
+        search_placeholder, search_url_template, image_url,
+        image_scale, image_bg_color, image_bg_color2, resboard
       ) VALUES (
         @id, @name, @url, @subtitle, @categoryId, @parentBookmarkId,
-        @visibleAtStart, @color,
-        @searchPlaceholder, @searchUrlTemplate, @imageUrl, @resboard
+        @visibleAtStart, @isMegaCard, @color,
+        @searchPlaceholder, @searchUrlTemplate, @imageUrl,
+        @imageScale, @imageBgColor, @imageBgColor2, @resboard
       )
     `).run({
       id,
@@ -137,10 +163,14 @@ export const insertBookmark = (id: string, input: BookmarkInput): Bookmark => {
       categoryId: input.categoryId ?? null,
       parentBookmarkId: input.parentBookmarkId ?? null,
       visibleAtStart: input.visibleAtStart ? 1 : 0,
+      isMegaCard: input.isMegaCard ? 1 : 0,
       color: input.color ?? null,
       searchPlaceholder: input.searchPlaceholder ?? null,
       searchUrlTemplate: input.searchUrlTemplate ?? null,
       imageUrl: input.imageUrl ?? null,
+      imageScale: input.imageScale ?? null,
+      imageBgColor: input.imageBgColor ?? null,
+      imageBgColor2: input.imageBgColor2 ?? null,
       resboard: serializeResboard(input.resboard)
     })
 
@@ -169,10 +199,14 @@ export const updateBookmark = (id: string, input: Partial<BookmarkInput>): Bookm
   if (input.categoryId !== undefined) setField('category_id', 'categoryId', input.categoryId ?? null)
   if (input.parentBookmarkId !== undefined) setField('parent_bookmark_id', 'parentBookmarkId', input.parentBookmarkId ?? null)
   if (input.visibleAtStart !== undefined) setField('visible_at_start', 'visibleAtStart', input.visibleAtStart ? 1 : 0)
+  if (input.isMegaCard !== undefined) setField('is_mega_card', 'isMegaCard', input.isMegaCard ? 1 : 0)
   if (input.color !== undefined) setField('color', 'color', input.color ?? null)
   if (input.searchPlaceholder !== undefined) setField('search_placeholder', 'searchPlaceholder', input.searchPlaceholder ?? null)
   if (input.searchUrlTemplate !== undefined) setField('search_url_template', 'searchUrlTemplate', input.searchUrlTemplate ?? null)
   if (input.imageUrl !== undefined) setField('image_url', 'imageUrl', input.imageUrl ?? null)
+  if (input.imageScale !== undefined) setField('image_scale', 'imageScale', input.imageScale ?? null)
+  if (input.imageBgColor !== undefined) setField('image_bg_color', 'imageBgColor', input.imageBgColor ?? null)
+  if (input.imageBgColor2 !== undefined) setField('image_bg_color2', 'imageBgColor2', input.imageBgColor2 ?? null)
   if (input.resboard !== undefined) setField('resboard', 'resboard', serializeResboard(input.resboard))
 
   const tx = db.transaction(() => {

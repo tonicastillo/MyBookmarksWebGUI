@@ -8,6 +8,11 @@ export interface Bookmark {
   visibleAtStart: boolean
   imageUrl?: string
 
+  // Marca explícita: este bookmark actúa como padre/contenedor de mega card.
+  // Una mega card no puede tener `parentBookmarkId`. Solo bookmarks con
+  // `isMegaCard === true` son candidatos válidos como padre.
+  isMegaCard: boolean
+
   // Mega card grouping (parent bookmark has no url; children reference parent.id)
   parentBookmarkId?: string
 
@@ -17,6 +22,12 @@ export interface Bookmark {
   // Inline site search: opens searchUrlTemplate.replace('{q}', encodeURIComponent(query)) in a new tab.
   searchPlaceholder?: string
   searchUrlTemplate?: string
+
+  // Image styling overrides. imageScale 0.5–1; bg colors any CSS color string.
+  // Si imageBgColor2 es null/undefined no hay degradado.
+  imageScale?: number | null
+  imageBgColor?: string | null
+  imageBgColor2?: string | null
 
   // Generic JSON metadata for the resboard feature.
   resboard?: Record<string, unknown> | null

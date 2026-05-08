@@ -1,144 +1,342 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import type { Bookmark } from '@/types'
-import { useCategoriesStore } from '@/stores/categories'
-import { useBookmarksStore } from '@/stores/bookmarks'
-import type { BookmarkInput } from '@/api/notion'
-import CategoryColorPicker from '@/components/CategoryColorPicker.vue'
+import { computed, ref, watch } from "vue";
+import type { Bookmark } from "@/types";
+import { useCategoriesStore } from "@/stores/categories";
+import { useBookmarksStore } from "@/stores/bookmarks";
+import type { BookmarkInput } from "@/api/notion";
+import CategoryColorPicker from "@/components/CategoryColorPicker.vue";
+import { buildImageStyle } from "@/composables/useImageStyle";
 
 const props = defineProps<{
-  bookmark?: Bookmark
-  submitting?: boolean
-}>()
+  bookmark?: Bookmark;
+  submitting?: boolean;
+}>();
 
 const emit = defineEmits<{
-  submit: [payload: { input: BookmarkInput; imageFile: File | null; removeImage: boolean }]
-  cancel: []
-  delete: []
-}>()
+  submit: [
+    payload: {
+      input: BookmarkInput;
+      imageFile: File | null;
+      removeImage: boolean;
+    },
+  ];
+  cancel: [];
+  delete: [];
+}>();
 
-const categoriesStore = useCategoriesStore()
-const bookmarksStore = useBookmarksStore()
+const categoriesStore = useCategoriesStore();
+const bookmarksStore = useBookmarksStore();
 
-const name = ref(props.bookmark?.name ?? '')
-const url = ref(props.bookmark?.url ?? '')
-const subtitle = ref(props.bookmark?.subtitle ?? '')
-const categoryId = ref(props.bookmark?.categoryId ?? '')
-const parentBookmarkId = ref(props.bookmark?.parentBookmarkId ?? '')
-const visibleAtStart = ref(props.bookmark?.visibleAtStart ?? false)
-const color = ref<string | null>(props.bookmark?.color ?? null)
-const searchPlaceholder = ref(props.bookmark?.searchPlaceholder ?? '')
-const searchUrlTemplate = ref(props.bookmark?.searchUrlTemplate ?? '')
-const tags = ref<string[]>([...(props.bookmark?.tags ?? [])])
-const tagInput = ref('')
+const name = ref(props.bookmark?.name ?? "");
+const url = ref(props.bookmark?.url ?? "");
+const subtitle = ref(props.bookmark?.subtitle ?? "");
+const categoryId = ref(props.bookmark?.categoryId ?? "");
+const parentBookmarkId = ref(props.bookmark?.parentBookmarkId ?? "");
+const visibleAtStart = ref(props.bookmark?.visibleAtStart ?? false);
+const isMegaCard = ref(props.bookmark?.isMegaCard ?? false);
+const color = ref<string | null>(props.bookmark?.color ?? null);
+const searchPlaceholder = ref(props.bookmark?.searchPlaceholder ?? "");
+const searchUrlTemplate = ref(props.bookmark?.searchUrlTemplate ?? "");
+const tags = ref<string[]>([...(props.bookmark?.tags ?? [])]);
+const tagInput = ref("");
 
-const imageFile = ref<File | null>(null)
-const imagePreview = ref<string | null>(null)
-const removeImage = ref(false)
+const imageFile = ref<File | null>(null);
+const imagePreview = ref<string | null>(null);
+const removeImage = ref(false);
+
+const imageScale = ref<number>(props.bookmark?.imageScale ?? 1);
+const imageBgColor = ref<string | null>(props.bookmark?.imageBgColor ?? null);
+const imageBgColor2 = ref<string | null>(props.bookmark?.imageBgColor2 ?? null);
+const useGradient = ref<boolean>(Boolean(props.bookmark?.imageBgColor2));
 
 const currentImageUrl = computed(() => {
-  if (removeImage.value) return null
-  if (imagePreview.value) return imagePreview.value
-  return props.bookmark?.imageUrl ?? null
-})
+  if (removeImage.value) return null;
+  if (imagePreview.value) return imagePreview.value;
+  return props.bookmark?.imageUrl ?? null;
+});
 
-const sortedCategories = computed(() => categoriesStore.orderedCategories)
+const previewStyle = computed(() =>
+  buildImageStyle({
+    imageScale: imageScale.value,
+    imageBgColor: imageBgColor.value,
+    imageBgColor2: useGradient.value ? imageBgColor2.value : null,
+  }),
+);
+
+const dashboardIconsUrl = computed(() => {
+  const q = name.value.trim();
+  if (!q) return "https://dashboardicons.com/";
+  return `https://dashboardicons.com/icons?q=${encodeURIComponent(q)}`;
+});
+
+const colorToHex = (value: string | null): string => {
+  if (!value) return "#cccccc";
+  const trimmed = value.trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) return trimmed;
+  if (/^#[0-9a-fA-F]{3}$/.test(trimmed)) {
+    return (
+      "#" +
+      trimmed
+        .slice(1)
+        .split("")
+        .map((c) => c + c)
+        .join("")
+    );
+  }
+  return "#cccccc";
+};
+
+const bgColor1Hex = computed({
+  get: () => colorToHex(imageBgColor.value),
+  set: (v: string) => {
+    imageBgColor.value = v;
+  },
+});
+const bgColor2Hex = computed({
+  get: () => colorToHex(imageBgColor2.value),
+  set: (v: string) => {
+    imageBgColor2.value = v;
+  },
+});
+
+const handleClearBg = () => {
+  imageBgColor.value = null;
+  imageBgColor2.value = null;
+  useGradient.value = false;
+};
+
+const toggleGradient = () => {
+  useGradient.value = !useGradient.value;
+  if (useGradient.value && !imageBgColor2.value) {
+    imageBgColor2.value = imageBgColor.value ?? "#ffffff";
+  }
+};
+
+const sortedCategories = computed(() => categoriesStore.orderedCategories);
 
 const possibleParents = computed(() => {
   return bookmarksStore.bookmarks
-    .filter(b => b.id !== props.bookmark?.id && !b.parentBookmarkId)
-    .sort((a, b) => a.name.localeCompare(b.name))
-})
+    .filter((b) => b.id !== props.bookmark?.id && b.isMegaCard)
+    .sort((a, b) => a.name.localeCompare(b.name));
+});
 
 const tagSuggestions = computed(() => {
-  const q = tagInput.value.toLowerCase().trim()
-  if (!q) return []
+  const q = tagInput.value.toLowerCase().trim();
+  if (!q) return [];
   return bookmarksStore.allTags
-    .filter(t => t.toLowerCase().includes(q) && !tags.value.includes(t))
-    .slice(0, 8)
-})
+    .filter((t) => t.toLowerCase().includes(q) && !tags.value.includes(t))
+    .slice(0, 8);
+});
 
 const handleImageChange = (event: Event) => {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file) return
-  imageFile.value = file
-  removeImage.value = false
-  const reader = new FileReader()
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  imageFile.value = file;
+  removeImage.value = false;
+  const reader = new FileReader();
   reader.onload = () => {
-    imagePreview.value = reader.result as string
-  }
-  reader.readAsDataURL(file)
-}
+    imagePreview.value = reader.result as string;
+  };
+  reader.readAsDataURL(file);
+};
 
 const handleRemoveImage = () => {
-  imageFile.value = null
-  imagePreview.value = null
-  removeImage.value = true
-}
+  imageFile.value = null;
+  imagePreview.value = null;
+  removeImage.value = true;
+};
 
 const addTag = (tag: string) => {
-  const trimmed = tag.trim()
-  if (!trimmed) return
-  if (!tags.value.includes(trimmed)) tags.value.push(trimmed)
-  tagInput.value = ''
-}
+  const trimmed = tag.trim();
+  if (!trimmed) return;
+  if (!tags.value.includes(trimmed)) tags.value.push(trimmed);
+  tagInput.value = "";
+};
 
 const handleTagKeydown = (event: KeyboardEvent) => {
-  if (event.key === 'Enter' || event.key === ',') {
-    event.preventDefault()
-    addTag(tagInput.value)
-  } else if (event.key === 'Backspace' && !tagInput.value && tags.value.length > 0) {
-    tags.value.pop()
+  if (event.key === "Enter" || event.key === ",") {
+    event.preventDefault();
+    addTag(tagInput.value);
+  } else if (
+    event.key === "Backspace" &&
+    !tagInput.value &&
+    tags.value.length > 0
+  ) {
+    tags.value.pop();
   }
-}
+};
 
 const removeTag = (tag: string) => {
-  tags.value = tags.value.filter(t => t !== tag)
-}
+  tags.value = tags.value.filter((t) => t !== tag);
+};
+
+watch(isMegaCard, (value) => {
+  if (value) parentBookmarkId.value = "";
+});
 
 const handleSubmit = (event: Event) => {
-  event.preventDefault()
+  event.preventDefault();
   const input: BookmarkInput = {
     name: name.value.trim(),
     url: url.value.trim() || null,
     subtitle: subtitle.value.trim() || null,
     categoryId: categoryId.value || null,
-    parentBookmarkId: parentBookmarkId.value || null,
+    parentBookmarkId: isMegaCard.value ? null : parentBookmarkId.value || null,
     visibleAtStart: visibleAtStart.value,
+    isMegaCard: isMegaCard.value,
     color: color.value,
     searchPlaceholder: searchPlaceholder.value.trim() || null,
     searchUrlTemplate: searchUrlTemplate.value.trim() || null,
-    tags: tags.value
-  }
-  emit('submit', { input, imageFile: imageFile.value, removeImage: removeImage.value })
-}
+    imageScale: imageScale.value < 1 ? imageScale.value : null,
+    imageBgColor: imageBgColor.value || null,
+    imageBgColor2: useGradient.value ? imageBgColor2.value || null : null,
+    tags: tags.value,
+  };
+  emit("submit", {
+    input,
+    imageFile: imageFile.value,
+    removeImage: removeImage.value,
+  });
+};
 
 watch(
   () => props.bookmark,
   (b) => {
-    if (!b) return
-    name.value = b.name
-    url.value = b.url ?? ''
-    subtitle.value = b.subtitle ?? ''
-    categoryId.value = b.categoryId ?? ''
-    parentBookmarkId.value = b.parentBookmarkId ?? ''
-    visibleAtStart.value = b.visibleAtStart
-    color.value = b.color ?? null
-    searchPlaceholder.value = b.searchPlaceholder ?? ''
-    searchUrlTemplate.value = b.searchUrlTemplate ?? ''
-    tags.value = [...b.tags]
-  }
-)
+    if (!b) return;
+    name.value = b.name;
+    url.value = b.url ?? "";
+    subtitle.value = b.subtitle ?? "";
+    categoryId.value = b.categoryId ?? "";
+    parentBookmarkId.value = b.parentBookmarkId ?? "";
+    visibleAtStart.value = b.visibleAtStart;
+    isMegaCard.value = b.isMegaCard ?? false;
+    color.value = b.color ?? null;
+    searchPlaceholder.value = b.searchPlaceholder ?? "";
+    searchUrlTemplate.value = b.searchUrlTemplate ?? "";
+    imageScale.value = b.imageScale ?? 1;
+    imageBgColor.value = b.imageBgColor ?? null;
+    imageBgColor2.value = b.imageBgColor2 ?? null;
+    useGradient.value = Boolean(b.imageBgColor2);
+    tags.value = [...b.tags];
+  },
+);
 </script>
 
 <template>
   <form class="bm-form" @submit="handleSubmit">
     <div class="form-grid">
       <div class="image-block">
-        <div class="image-preview">
-          <img v-if="currentImageUrl" :src="currentImageUrl" :alt="name" />
+        <div class="image-preview" :style="previewStyle.thumb">
+          <img
+            v-if="currentImageUrl"
+            :src="currentImageUrl"
+            :alt="name"
+            :style="previewStyle.img"
+          />
           <span v-else class="image-placeholder">Sin imagen</span>
+
+          <div class="image-toolbar" @click.stop>
+            <a
+              :href="dashboardIconsUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="tb-btn"
+              title="Buscar icono en dashboardicons.com"
+              aria-label="Buscar icono"
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+            </a>
+
+            <label
+              class="tb-color"
+              :title="imageBgColor ? `Color 1: ${imageBgColor}` : 'Color 1'"
+            >
+              <span
+                class="tb-swatch"
+                :style="{ background: imageBgColor || 'transparent' }"
+              >
+                <svg
+                  v-if="!imageBgColor"
+                  width="11"
+                  height="11"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                >
+                  <line x1="4" y1="20" x2="20" y2="4" />
+                </svg>
+              </span>
+              <input type="color" v-model="bgColor1Hex" />
+            </label>
+
+            <button
+              type="button"
+              class="tb-btn tb-toggle"
+              :class="{ active: useGradient }"
+              :title="
+                useGradient
+                  ? 'Quitar segundo color'
+                  : 'Añadir segundo color (degradado)'
+              "
+              @click="toggleGradient"
+            >
+              <span v-if="!useGradient">+</span>
+              <span v-else>×</span>
+            </button>
+
+            <label
+              v-if="useGradient"
+              class="tb-color"
+              :title="imageBgColor2 ? `Color 2: ${imageBgColor2}` : 'Color 2'"
+            >
+              <span
+                class="tb-swatch"
+                :style="{ background: imageBgColor2 || 'transparent' }"
+              ></span>
+              <input type="color" v-model="bgColor2Hex" />
+            </label>
+
+            <div
+              class="tb-slider"
+              :title="`Escala: ${Math.round(imageScale * 100)}%`"
+            >
+              <input
+                v-model.number="imageScale"
+                type="range"
+                min="0.5"
+                max="1"
+                step="0.05"
+              />
+            </div>
+
+            <button
+              v-if="imageBgColor || imageBgColor2 || imageScale < 1"
+              type="button"
+              class="tb-btn tb-clear"
+              title="Restablecer estilo"
+              @click="
+                handleClearBg();
+                imageScale = 1;
+              "
+            >
+              ⟲
+            </button>
+          </div>
         </div>
         <div class="image-actions">
           <label class="btn btn-secondary">
@@ -190,7 +388,7 @@ watch(
 
           <label class="field">
             <span class="label">Bookmark padre (mega card)</span>
-            <select v-model="parentBookmarkId">
+            <select v-model="parentBookmarkId" :disabled="isMegaCard">
               <option value="">— Ninguno —</option>
               <option v-for="b in possibleParents" :key="b.id" :value="b.id">
                 {{ b.name }}
@@ -207,6 +405,11 @@ watch(
         <label class="field toggle">
           <input v-model="visibleAtStart" type="checkbox" />
           <span>Visible en la home</span>
+        </label>
+
+        <label class="field toggle">
+          <input v-model="isMegaCard" type="checkbox" />
+          <span>Es Mega Card (puede tener bookmarks hijos)</span>
         </label>
 
         <div class="field">
@@ -272,9 +475,11 @@ watch(
         Borrar
       </button>
       <div class="actions-right">
-        <button type="button" class="btn btn-ghost" @click="emit('cancel')">Cancelar</button>
+        <button type="button" class="btn btn-ghost" @click="emit('cancel')">
+          Cancelar
+        </button>
         <button type="submit" class="btn btn-primary" :disabled="submitting">
-          {{ submitting ? 'Guardando…' : (bookmark ? 'Guardar' : 'Crear') }}
+          {{ submitting ? "Guardando…" : bookmark ? "Guardar" : "Crear" }}
         </button>
       </div>
     </div>
@@ -294,7 +499,9 @@ watch(
   align-items: start;
 }
 @media (max-width: 720px) {
-  .form-grid { grid-template-columns: 1fr; }
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .image-block {
@@ -311,11 +518,121 @@ watch(
   display: grid;
   place-items: center;
   overflow: hidden;
+  position: relative;
 }
 .image-preview img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
+}
+
+.image-toolbar {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 7px;
+  border-radius: 10px;
+  background: rgba(20, 18, 14, 0.78);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #fff;
+  opacity: 0;
+  transform: translateY(2px);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
+  pointer-events: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .image-preview:hover .image-toolbar,
+  .image-preview:focus-within .image-toolbar {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+}
+@media (hover: none) {
+  .image-toolbar {
+    display: none;
+  }
+}
+
+.tb-btn {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  text-decoration: none;
+  flex-shrink: 0;
+  transition: background 120ms ease;
+}
+.tb-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+.tb-toggle.active {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.tb-color {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.tb-swatch {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: repeating-conic-gradient(#888 0 25%, #444 0 50%) 50% / 8px 8px;
+  color: rgba(255, 255, 255, 0.85);
+}
+.tb-color input[type="color"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.tb-slider {
+  flex: 1;
+  min-width: 60px;
+  display: flex;
+  align-items: center;
+}
+.tb-slider input[type="range"] {
+  width: 100%;
+  height: 18px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: #fff;
+  background: transparent;
+}
+
+.tb-clear {
+  font-size: 14px;
 }
 .image-placeholder {
   font-size: 12px;
@@ -342,7 +659,9 @@ watch(
   gap: 12px;
 }
 @media (max-width: 540px) {
-  .row { grid-template-columns: 1fr; }
+  .row {
+    grid-template-columns: 1fr;
+  }
 }
 .label {
   font-size: 11px;
@@ -473,7 +792,10 @@ watch(
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
   display: inline-flex;
   align-items: center;
   gap: 6px;

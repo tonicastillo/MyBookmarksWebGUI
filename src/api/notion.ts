@@ -12,10 +12,14 @@ export interface BookmarkInput {
   categoryId?: string | null
   parentBookmarkId?: string | null
   visibleAtStart?: boolean
+  isMegaCard?: boolean
   color?: string | null
   searchPlaceholder?: string | null
   searchUrlTemplate?: string | null
   imageUrl?: string | null
+  imageScale?: number | null
+  imageBgColor?: string | null
+  imageBgColor2?: string | null
   tags?: string[]
   resboard?: Record<string, unknown> | null
 }

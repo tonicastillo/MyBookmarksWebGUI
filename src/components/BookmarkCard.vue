@@ -4,6 +4,7 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { resolveBookmarkHue } from '@/composables/useColorHue'
 import { useCategoriesStore } from '@/stores/categories'
+import { buildImageStyle } from '@/composables/useImageStyle'
 
 const router = useRouter()
 const categoriesStore = useCategoriesStore()
@@ -77,6 +78,8 @@ const stopAnchorNav = (event: Event) => {
 }
 
 const cardTag = computed(() => (hasUrl.value ? 'a' : 'div'))
+
+const imageStyle = computed(() => buildImageStyle(props.bookmark))
 </script>
 
 <template>
@@ -89,12 +92,13 @@ const cardTag = computed(() => (hasUrl.value ? 'a' : 'div'))
     :rel="hasUrl ? 'noopener noreferrer' : undefined"
     :style="hue !== null ? { '--c': hue } : {}"
   >
-    <div class="card-thumb">
+    <div class="card-thumb" :style="imageStyle.thumb">
       <img
         v-if="bookmark.imageUrl"
         :src="bookmark.imageUrl"
         :alt="bookmark.name"
         loading="lazy"
+        :style="imageStyle.img"
       />
       <span v-else class="card-thumb-text">{{ initials }}</span>
     </div>
