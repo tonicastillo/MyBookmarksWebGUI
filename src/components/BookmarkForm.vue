@@ -10,6 +10,8 @@ import { buildImageStyle } from "@/composables/useImageStyle";
 const props = defineProps<{
   bookmark?: Bookmark;
   submitting?: boolean;
+  defaultCategoryId?: string;
+  defaultParentBookmarkId?: string;
 }>();
 
 const emit = defineEmits<{
@@ -30,9 +32,9 @@ const bookmarksStore = useBookmarksStore();
 const name = ref(props.bookmark?.name ?? "");
 const url = ref(props.bookmark?.url ?? "");
 const subtitle = ref(props.bookmark?.subtitle ?? "");
-const categoryId = ref(props.bookmark?.categoryId ?? "");
-const parentBookmarkId = ref(props.bookmark?.parentBookmarkId ?? "");
-const visibleAtStart = ref(props.bookmark?.visibleAtStart ?? false);
+const categoryId = ref(props.bookmark?.categoryId ?? props.defaultCategoryId ?? "");
+const parentBookmarkId = ref(props.bookmark?.parentBookmarkId ?? props.defaultParentBookmarkId ?? "");
+const visibleAtStart = ref(props.bookmark?.visibleAtStart ?? true);
 const isMegaCard = ref(props.bookmark?.isMegaCard ?? false);
 const color = ref<string | null>(props.bookmark?.color ?? null);
 const searchPlaceholder = ref(props.bookmark?.searchPlaceholder ?? "");

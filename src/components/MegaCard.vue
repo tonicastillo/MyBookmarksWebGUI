@@ -62,6 +62,18 @@ const handleEditClick = (event: Event) => {
   router.push(`/edit/${props.parent.id}`)
 }
 
+const handleAddChildClick = (event: Event) => {
+  event.preventDefault()
+  event.stopPropagation()
+  router.push({
+    path: '/edit',
+    query: {
+      categoryId: props.parent.categoryId ?? '',
+      parentBookmarkId: props.parent.id,
+    },
+  })
+}
+
 const searchQuery = ref('')
 const handleSearchSubmit = (event: Event) => {
   event.preventDefault()
@@ -112,6 +124,17 @@ const handleTagClick = (tag: string) => {
         <div v-if="parent.subtitle" class="megacard-sub">{{ parent.subtitle }}</div>
       </div>
       <span class="megacard-badge">{{ children.length }} sites</span>
+      <button
+        class="card-edit mega-edit"
+        :title="`Nuevo bookmark en ${parent.name}`"
+        :aria-label="`Nuevo bookmark en ${parent.name}`"
+        @click="handleAddChildClick"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+      </button>
       <button class="card-edit mega-edit" aria-label="Editar" @click="handleEditClick">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 20h9" />

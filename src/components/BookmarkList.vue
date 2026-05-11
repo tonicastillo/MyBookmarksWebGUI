@@ -27,7 +27,7 @@ const totalCount = () => props.groups.reduce((acc, g) => acc + 1 + g.children.le
     <div class="cards">
       <template v-for="g in groups" :key="g.bookmark.id">
         <MegaCard
-          v-if="g.children.length > 0"
+          v-if="g.bookmark.isMegaCard"
           :parent="g.bookmark"
           :children="g.children"
           @tag-click="handleTagClick"

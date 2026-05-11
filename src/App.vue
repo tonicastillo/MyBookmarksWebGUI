@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, provide, ref, watch } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import Sidebar from '@/components/Sidebar.vue'
 
@@ -14,14 +14,19 @@ const closeSidebar = () => {
   isSidebarOpen.value = false
 }
 
+provide('toggleSidebar', toggleSidebar)
+
+const isHome = computed(() => route.name === 'home')
+
 watch(() => route.fullPath, () => {
   isSidebarOpen.value = false
 })
 </script>
 
 <template>
-  <div class="app-shell">
+  <div class="app-shell" :class="{ 'is-home': isHome }">
     <button
+      v-if="!isHome"
       type="button"
       class="menu-btn"
       :aria-expanded="isSidebarOpen"
@@ -112,6 +117,9 @@ watch(() => route.fullPath, () => {
   .main-inner {
     padding: 64px 20px 64px;
   }
+  .app-shell.is-home .main-inner {
+    padding: 0 20px 64px;
+  }
 
   .menu-btn {
     display: grid;
@@ -129,6 +137,9 @@ watch(() => route.fullPath, () => {
 @media (max-width: 480px) {
   .main-inner {
     padding: 60px 14px 48px;
+  }
+  .app-shell.is-home .main-inner {
+    padding: 0 14px 48px;
   }
 }
 </style>

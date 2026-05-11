@@ -14,6 +14,17 @@ const categoriesStore = useCategoriesStore()
 const id = computed(() => (route.params.id as string | undefined) || undefined)
 const bookmark = computed(() => (id.value ? bookmarksStore.getById(id.value) : undefined))
 
+const defaultCategoryId = computed(() => {
+  if (id.value) return undefined
+  const q = route.query.categoryId
+  return typeof q === 'string' && q ? q : undefined
+})
+const defaultParentBookmarkId = computed(() => {
+  if (id.value) return undefined
+  const q = route.query.parentBookmarkId
+  return typeof q === 'string' && q ? q : undefined
+})
+
 const submitting = ref(false)
 const errorMessage = ref<string | null>(null)
 
@@ -80,6 +91,8 @@ const handleCancel = () => {
 
     <BookmarkForm
       :bookmark="bookmark"
+      :default-category-id="defaultCategoryId"
+      :default-parent-bookmark-id="defaultParentBookmarkId"
       :submitting="submitting"
       @submit="handleSubmit"
       @cancel="handleCancel"

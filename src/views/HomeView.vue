@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from "vue";
+import { ref, computed, inject, onMounted, onUnmounted, watch } from "vue";
 import { useBookmarks } from "@/composables/useBookmarks";
 import { useBookmarksStore } from "@/stores/bookmarks";
 import { useSearch } from "@/composables/useSearch";
@@ -31,6 +31,7 @@ const { getCacheTimestamp } = useCache();
 
 const showTags = ref(false);
 const now = ref(Date.now());
+const toggleSidebar = inject<() => void>("toggleSidebar", () => {});
 let tickInterval: ReturnType<typeof setInterval> | null = null;
 
 const isFiltering = computed(() => {
@@ -110,6 +111,12 @@ watch(selectedTags, (tags) => {
   }
 });
 
+watch(showTags, (visible) => {
+  if (visible) {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+});
+
 watch(categoryFilter, (value) => {
   if (value) {
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -148,6 +155,18 @@ onUnmounted(() => {
     <!-- Barra de herramientas -->
     <div class="toolbar">
       <div class="toolbar-row">
+        <button
+          type="button"
+          class="menu-btn-mobile"
+          aria-label="Abrir menú"
+          @click="toggleSidebar()"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
         <div class="search-wrap">
           <SearchBox v-model="searchQuery" />
         </div>
@@ -307,6 +326,24 @@ onUnmounted(() => {
   min-width: 0;
 }
 
+.menu-btn-mobile {
+  display: none;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  place-items: center;
+  background: var(--bg-elev, #ffffff);
+  border: 0.5px solid var(--border, rgba(28, 26, 20, 0.1));
+  border-radius: 10px;
+  color: var(--fg, #1c1a14);
+  cursor: pointer;
+  padding: 0;
+  transition: background 120ms ease;
+}
+.menu-btn-mobile:hover {
+  background: var(--bg-soft, #f3f1ec);
+}
+
 .tags-btn {
   display: inline-flex;
   align-items: center;
@@ -430,14 +467,27 @@ onUnmounted(() => {
   border-radius: 14px;
 }
 
+@media (max-width: 900px) {
+  .menu-btn-mobile {
+    display: grid;
+  }
+  .toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: var(--bg, #faf9f7);
+    padding: 12px 0 10px;
+    margin-left: -20px;
+    margin-right: -20px;
+    padding-left: 20px;
+    padding-right: 20px;
+    border-bottom: 0.5px solid var(--border, rgba(28, 26, 20, 0.08));
+  }
+}
+
 @media (max-width: 600px) {
   .toolbar-row {
     gap: 8px;
-    flex-wrap: wrap;
-  }
-  .search-wrap {
-    flex: 1 1 100%;
-    order: -1;
   }
   .tags-btn {
     height: 40px;
@@ -456,6 +506,15 @@ onUnmounted(() => {
   }
   .tags-panel {
     padding: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .toolbar {
+    margin-left: -14px;
+    margin-right: -14px;
+    padding-left: 14px;
+    padding-right: 14px;
   }
 }
 
