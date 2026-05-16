@@ -6,12 +6,22 @@ import { useBookmarksStore } from "@/stores/bookmarks";
 import type { BookmarkInput } from "@/api/notion";
 import CategoryColorPicker from "@/components/CategoryColorPicker.vue";
 import { buildImageStyle } from "@/composables/useImageStyle";
+import {
+  useImageClipboard,
+  type ImageClipboardData,
+} from "@/composables/useImageClipboard";
+import {
+  fetchImageAsDataUrl,
+  dataUrlToFile,
+} from "@/composables/useBookmarkImageTransfer";
+import type { BookmarkDuplicateData } from "@/composables/useBookmarkDuplicate";
 
 const props = defineProps<{
   bookmark?: Bookmark;
   submitting?: boolean;
   defaultCategoryId?: string;
   defaultParentBookmarkId?: string;
+  prefill?: BookmarkDuplicateData;
 }>();
 
 const emit = defineEmits<{
@@ -29,27 +39,54 @@ const emit = defineEmits<{
 const categoriesStore = useCategoriesStore();
 const bookmarksStore = useBookmarksStore();
 
-const name = ref(props.bookmark?.name ?? "");
-const url = ref(props.bookmark?.url ?? "");
-const subtitle = ref(props.bookmark?.subtitle ?? "");
-const categoryId = ref(props.bookmark?.categoryId ?? props.defaultCategoryId ?? "");
-const parentBookmarkId = ref(props.bookmark?.parentBookmarkId ?? props.defaultParentBookmarkId ?? "");
-const visibleAtStart = ref(props.bookmark?.visibleAtStart ?? true);
-const isMegaCard = ref(props.bookmark?.isMegaCard ?? false);
-const color = ref<string | null>(props.bookmark?.color ?? null);
-const searchPlaceholder = ref(props.bookmark?.searchPlaceholder ?? "");
-const searchUrlTemplate = ref(props.bookmark?.searchUrlTemplate ?? "");
-const tags = ref<string[]>([...(props.bookmark?.tags ?? [])]);
+const p = props.prefill;
+const name = ref(props.bookmark?.name ?? p?.name ?? "");
+const url = ref(props.bookmark?.url ?? p?.url ?? "");
+const subtitle = ref(props.bookmark?.subtitle ?? p?.subtitle ?? "");
+const categoryId = ref(
+  props.bookmark?.categoryId ?? p?.categoryId ?? props.defaultCategoryId ?? "",
+);
+const parentBookmarkId = ref(
+  props.bookmark?.parentBookmarkId ??
+    p?.parentBookmarkId ??
+    props.defaultParentBookmarkId ??
+    "",
+);
+const visibleAtStart = ref(props.bookmark?.visibleAtStart ?? p?.visibleAtStart ?? true);
+const isMegaCard = ref(props.bookmark?.isMegaCard ?? p?.isMegaCard ?? false);
+const color = ref<string | null>(props.bookmark?.color ?? p?.color ?? null);
+const searchPlaceholder = ref(
+  props.bookmark?.searchPlaceholder ?? p?.searchPlaceholder ?? "",
+);
+const searchUrlTemplate = ref(
+  props.bookmark?.searchUrlTemplate ?? p?.searchUrlTemplate ?? "",
+);
+const tags = ref<string[]>([...(props.bookmark?.tags ?? p?.tags ?? [])]);
 const tagInput = ref("");
 
 const imageFile = ref<File | null>(null);
 const imagePreview = ref<string | null>(null);
 const removeImage = ref(false);
 
-const imageScale = ref<number>(props.bookmark?.imageScale ?? 1);
-const imageBgColor = ref<string | null>(props.bookmark?.imageBgColor ?? null);
-const imageBgColor2 = ref<string | null>(props.bookmark?.imageBgColor2 ?? null);
-const useGradient = ref<boolean>(Boolean(props.bookmark?.imageBgColor2));
+const imageScale = ref<number>(props.bookmark?.imageScale ?? p?.imageScale ?? 1);
+const imageBgColor = ref<string | null>(
+  props.bookmark?.imageBgColor ?? p?.imageBgColor ?? null,
+);
+const imageBgColor2 = ref<string | null>(
+  props.bookmark?.imageBgColor2 ?? p?.imageBgColor2 ?? null,
+);
+const useGradient = ref<boolean>(
+  Boolean(props.bookmark?.imageBgColor2 ?? p?.imageBgColor2),
+);
+
+if (!props.bookmark && p?.imageDataUrl && p.imageMimeType) {
+  const file = dataUrlToFile(p.imageDataUrl, p.imageMimeType, "duplicate");
+  if (file) {
+    imageFile.value = file;
+    imagePreview.value = p.imageDataUrl;
+    removeImage.value = false;
+  }
+}
 
 const currentImageUrl = computed(() => {
   if (removeImage.value) return null;
@@ -149,6 +186,65 @@ const handleRemoveImage = () => {
   removeImage.value = true;
 };
 
+const { clipboard, hasClipboard, setClipboard } = useImageClipboard();
+
+const toolbarOpen = ref(false);
+const toggleToolbar = () => {
+  toolbarOpen.value = !toolbarOpen.value;
+};
+const closeToolbar = () => {
+  toolbarOpen.value = false;
+};
+
+const handleCopy = async () => {
+  let imageDataUrl: string | null = null;
+  let imageMimeType: string | null = null;
+  if (imageFile.value) {
+    imageMimeType = imageFile.value.type;
+    imageDataUrl = await new Promise<string | null>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(imageFile.value!);
+    });
+  } else if (currentImageUrl.value && !removeImage.value) {
+    const fetched = await fetchImageAsDataUrl(currentImageUrl.value);
+    if (fetched) {
+      imageDataUrl = fetched.dataUrl;
+      imageMimeType = fetched.mime;
+    }
+  }
+  const payload: ImageClipboardData = {
+    imageScale: imageScale.value,
+    imageBgColor: imageBgColor.value,
+    imageBgColor2: useGradient.value ? imageBgColor2.value : null,
+    imageDataUrl,
+    imageMimeType,
+  };
+  setClipboard(payload);
+};
+
+const handlePaste = () => {
+  const data = clipboard.value;
+  if (!data) return;
+  imageScale.value = data.imageScale;
+  imageBgColor.value = data.imageBgColor;
+  imageBgColor2.value = data.imageBgColor2;
+  useGradient.value = Boolean(data.imageBgColor2);
+  if (data.imageDataUrl && data.imageMimeType) {
+    const file = dataUrlToFile(data.imageDataUrl, data.imageMimeType);
+    if (file) {
+      imageFile.value = file;
+      imagePreview.value = data.imageDataUrl;
+      removeImage.value = false;
+    }
+  } else {
+    imageFile.value = null;
+    imagePreview.value = null;
+    removeImage.value = true;
+  }
+};
+
 const addTag = (tag: string) => {
   const trimmed = tag.trim();
   if (!trimmed) return;
@@ -229,7 +325,12 @@ watch(
   <form class="bm-form" @submit="handleSubmit">
     <div class="form-grid">
       <div class="image-block">
-        <div class="image-preview" :style="previewStyle.thumb">
+        <div
+          class="image-preview"
+          :class="{ 'toolbar-open': toolbarOpen }"
+          :style="previewStyle.thumb"
+          @click="closeToolbar"
+        >
           <img
             v-if="currentImageUrl"
             :src="currentImageUrl"
@@ -238,126 +339,240 @@ watch(
           />
           <span v-else class="image-placeholder">Sin imagen</span>
 
-          <div class="image-toolbar" @click.stop>
-            <a
-              :href="dashboardIconsUrl"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="tb-btn"
-              title="Buscar icono en dashboardicons.com"
-              aria-label="Buscar icono"
+          <button
+            type="button"
+            class="toolbar-fab"
+            :class="{ 'is-open': toolbarOpen }"
+            :title="toolbarOpen ? 'Cerrar acciones' : 'Mostrar acciones'"
+            :aria-label="toolbarOpen ? 'Cerrar acciones' : 'Mostrar acciones'"
+            @click.stop="toggleToolbar"
+          >
+            <svg
+              v-if="!toolbarOpen"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
             >
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <circle cx="11" cy="11" r="7" />
-                <path d="m21 21-4.3-4.3" />
-              </svg>
-            </a>
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            <svg
+              v-else
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+            >
+              <line x1="6" y1="6" x2="18" y2="18" />
+              <line x1="6" y1="18" x2="18" y2="6" />
+            </svg>
+          </button>
 
-            <label
-              class="tb-color"
-              :title="imageBgColor ? `Color 1: ${imageBgColor}` : 'Color 1'"
-            >
-              <span
-                class="tb-swatch"
-                :style="{ background: imageBgColor || 'transparent' }"
+          <div class="image-toolbar" @click.stop>
+            <div class="tb-row">
+              <a
+                :href="dashboardIconsUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="tb-btn"
+                title="Buscar icono en dashboardicons.com"
+                aria-label="Buscar icono"
               >
                 <svg
-                  v-if="!imageBgColor"
-                  width="11"
-                  height="11"
+                  width="13"
+                  height="13"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
-                  stroke-width="2.5"
+                  stroke-width="2"
                   stroke-linecap="round"
+                  stroke-linejoin="round"
                 >
-                  <line x1="4" y1="20" x2="20" y2="4" />
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m21 21-4.3-4.3" />
                 </svg>
-              </span>
-              <input type="color" v-model="bgColor1Hex" />
-            </label>
+              </a>
 
-            <button
-              type="button"
-              class="tb-btn tb-toggle"
-              :class="{ active: useGradient }"
-              :title="
-                useGradient
-                  ? 'Quitar segundo color'
-                  : 'Añadir segundo color (degradado)'
-              "
-              @click="toggleGradient"
-            >
-              <span v-if="!useGradient">+</span>
-              <span v-else>×</span>
-            </button>
+              <label
+                class="tb-color"
+                :title="imageBgColor ? `Color 1: ${imageBgColor}` : 'Color 1'"
+              >
+                <span
+                  class="tb-swatch"
+                  :style="{ background: imageBgColor || 'transparent' }"
+                >
+                  <svg
+                    v-if="!imageBgColor"
+                    width="11"
+                    height="11"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                    stroke-linecap="round"
+                  >
+                    <line x1="4" y1="20" x2="20" y2="4" />
+                  </svg>
+                </span>
+                <input type="color" v-model="bgColor1Hex" />
+              </label>
 
-            <label
-              v-if="useGradient"
-              class="tb-color"
-              :title="imageBgColor2 ? `Color 2: ${imageBgColor2}` : 'Color 2'"
-            >
-              <span
-                class="tb-swatch"
-                :style="{ background: imageBgColor2 || 'transparent' }"
-              ></span>
-              <input type="color" v-model="bgColor2Hex" />
-            </label>
+              <button
+                type="button"
+                class="tb-btn tb-toggle"
+                :class="{ active: useGradient }"
+                :title="
+                  useGradient
+                    ? 'Quitar segundo color'
+                    : 'Añadir segundo color (degradado)'
+                "
+                @click="toggleGradient"
+              >
+                <span v-if="!useGradient">+</span>
+                <span v-else>×</span>
+              </button>
 
-            <div
-              class="tb-slider"
-              :title="`Escala: ${Math.round(imageScale * 100)}%`"
-            >
-              <input
-                v-model.number="imageScale"
-                type="range"
-                min="0.5"
-                max="1"
-                step="0.05"
-              />
+              <label
+                v-if="useGradient"
+                class="tb-color"
+                :title="imageBgColor2 ? `Color 2: ${imageBgColor2}` : 'Color 2'"
+              >
+                <span
+                  class="tb-swatch"
+                  :style="{ background: imageBgColor2 || 'transparent' }"
+                ></span>
+                <input type="color" v-model="bgColor2Hex" />
+              </label>
+
+              <div
+                class="tb-slider"
+                :title="`Escala: ${Math.round(imageScale * 100)}%`"
+              >
+                <input
+                  v-model.number="imageScale"
+                  type="range"
+                  min="0.5"
+                  max="1"
+                  step="0.05"
+                />
+              </div>
+
+              <button
+                type="button"
+                class="tb-btn tb-clear"
+                :disabled="!imageBgColor && !imageBgColor2 && imageScale >= 1"
+                title="Restablecer estilo"
+                @click="
+                  handleClearBg();
+                  imageScale = 1;
+                "
+              >
+                ⟲
+              </button>
             </div>
 
-            <button
-              v-if="imageBgColor || imageBgColor2 || imageScale < 1"
-              type="button"
-              class="tb-btn tb-clear"
-              title="Restablecer estilo"
-              @click="
-                handleClearBg();
-                imageScale = 1;
-              "
-            >
-              ⟲
-            </button>
+            <div class="tb-row">
+              <label class="tb-btn tb-file" title="Subir imagen" aria-label="Subir imagen">
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif,image/avif"
+                  hidden
+                  @change="handleImageChange"
+                />
+              </label>
+
+              <button
+                type="button"
+                class="tb-btn"
+                :disabled="!currentImageUrl"
+                title="Quitar imagen"
+                aria-label="Quitar imagen"
+                @click="handleRemoveImage"
+              >
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                  <path d="M10 11v6" />
+                  <path d="M14 11v6" />
+                </svg>
+              </button>
+
+              <button
+                type="button"
+                class="tb-btn"
+                title="Copiar bookmark"
+                aria-label="Copiar bookmark"
+                @click="handleCopy"
+              >
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+              </button>
+
+              <button
+                type="button"
+                class="tb-btn"
+                :disabled="!hasClipboard"
+                title="Pegar bookmark"
+                aria-label="Pegar bookmark"
+                @click="handlePaste"
+              >
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                  <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+                </svg>
+              </button>
+            </div>
           </div>
-        </div>
-        <div class="image-actions">
-          <label class="btn btn-secondary">
-            Subir imagen
-            <input
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif,image/avif"
-              hidden
-              @change="handleImageChange"
-            />
-          </label>
-          <button
-            v-if="currentImageUrl"
-            type="button"
-            class="btn btn-ghost"
-            @click="handleRemoveImage"
-          >
-            Quitar
-          </button>
         </div>
       </div>
 
@@ -535,9 +750,9 @@ watch(
   right: 6px;
   bottom: 6px;
   display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 7px;
+  flex-direction: column;
+  gap: 5px;
+  padding: 6px 7px;
   border-radius: 10px;
   background: rgba(20, 18, 14, 0.78);
   backdrop-filter: blur(8px);
@@ -550,6 +765,11 @@ watch(
     transform 140ms ease;
   pointer-events: none;
 }
+.tb-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 @media (hover: hover) and (pointer: fine) {
   .image-preview:hover .image-toolbar,
   .image-preview:focus-within .image-toolbar {
@@ -558,9 +778,58 @@ watch(
     pointer-events: auto;
   }
 }
-@media (hover: none) {
-  .image-toolbar {
-    display: none;
+.image-preview.toolbar-open .image-toolbar {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.toolbar-fab {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(20, 18, 14, 0.78);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #fff;
+  cursor: pointer;
+  padding: 0;
+  z-index: 2;
+  transition: background 120ms ease;
+}
+.toolbar-fab:hover {
+  background: rgba(20, 18, 14, 0.9);
+}
+.toolbar-fab.is-open {
+  background: rgba(255, 255, 255, 0.92);
+  color: #1c1a14;
+}
+@media (hover: none), (max-width: 720px) {
+  .toolbar-fab {
+    display: flex;
+  }
+  .image-preview .image-toolbar {
+    opacity: 0;
+    transform: translateY(2px);
+    pointer-events: none;
+  }
+  .image-preview:hover .image-toolbar,
+  .image-preview:focus-within .image-toolbar {
+    opacity: 0;
+    transform: translateY(2px);
+    pointer-events: none;
+  }
+  .image-preview.toolbar-open .image-toolbar {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
   }
 }
 
@@ -580,11 +849,18 @@ watch(
   flex-shrink: 0;
   transition: background 120ms ease;
 }
-.tb-btn:hover {
+.tb-btn:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.22);
+}
+.tb-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 .tb-toggle.active {
   background: rgba(255, 255, 255, 0.28);
+}
+.tb-file {
+  position: relative;
 }
 
 .tb-color {
@@ -639,10 +915,6 @@ watch(
 .image-placeholder {
   font-size: 12px;
   color: var(--fg-faint, #a8a294);
-}
-.image-actions {
-  display: flex;
-  gap: 8px;
 }
 
 .fields {

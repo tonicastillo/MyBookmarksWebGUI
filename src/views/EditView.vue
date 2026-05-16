@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, shallowRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useBookmarksStore } from '@/stores/bookmarks'
 import { useCategoriesStore } from '@/stores/categories'
 import BookmarkForm from '@/components/BookmarkForm.vue'
 import type { BookmarkInput } from '@/api/notion'
+import {
+  useBookmarkDuplicate,
+  type BookmarkDuplicateData,
+} from '@/composables/useBookmarkDuplicate'
 
 const route = useRoute()
 const router = useRouter()
@@ -24,6 +28,11 @@ const defaultParentBookmarkId = computed(() => {
   const q = route.query.parentBookmarkId
   return typeof q === 'string' && q ? q : undefined
 })
+
+const { consumePendingDuplicate } = useBookmarkDuplicate()
+const prefill = shallowRef<BookmarkDuplicateData | null>(
+  id.value ? null : consumePendingDuplicate(),
+)
 
 const submitting = ref(false)
 const errorMessage = ref<string | null>(null)
@@ -93,6 +102,7 @@ const handleCancel = () => {
       :bookmark="bookmark"
       :default-category-id="defaultCategoryId"
       :default-parent-bookmark-id="defaultParentBookmarkId"
+      :prefill="prefill ?? undefined"
       :submitting="submitting"
       @submit="handleSubmit"
       @cancel="handleCancel"

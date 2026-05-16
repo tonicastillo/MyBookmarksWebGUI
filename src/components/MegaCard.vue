@@ -5,10 +5,17 @@ import { useRouter } from 'vue-router'
 import { resolveBookmarkHue } from '@/composables/useColorHue'
 import { useCategoriesStore } from '@/stores/categories'
 import { buildImageStyle } from '@/composables/useImageStyle'
+import { useAltKey } from '@/composables/useAltKey'
+import {
+  useBookmarkDuplicate,
+  buildDuplicatePayload,
+} from '@/composables/useBookmarkDuplicate'
 import MiniCard from './MiniCard.vue'
 
 const router = useRouter()
 const categoriesStore = useCategoriesStore()
+const { isAltPressed } = useAltKey()
+const { setPendingDuplicate } = useBookmarkDuplicate()
 
 const props = defineProps<{
   parent: Bookmark
@@ -56,9 +63,15 @@ const initials = computed(() => {
   return trimmed.slice(0, 2).toUpperCase()
 })
 
-const handleEditClick = (event: Event) => {
+const handleEditClick = async (event: MouseEvent) => {
   event.preventDefault()
   event.stopPropagation()
+  if (event.altKey) {
+    const payload = await buildDuplicatePayload(props.parent)
+    setPendingDuplicate(payload)
+    router.push('/edit')
+    return
+  }
   router.push(`/edit/${props.parent.id}`)
 }
 
@@ -135,10 +148,20 @@ const handleTagClick = (tag: string) => {
           <line x1="5" y1="12" x2="19" y2="12" />
         </svg>
       </button>
-      <button class="card-edit mega-edit" aria-label="Editar" @click="handleEditClick">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <button
+        class="card-edit mega-edit"
+        :class="{ 'is-duplicate': isAltPressed }"
+        :aria-label="isAltPressed ? `Duplicar ${parent.name}` : 'Editar'"
+        :title="isAltPressed ? 'Duplicar mega card (sólo el padre)' : 'Editar (Alt para duplicar)'"
+        @click="handleEditClick"
+      >
+        <svg v-if="!isAltPressed" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 20h9" />
           <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4Z" />
+        </svg>
+        <svg v-else width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
         </svg>
       </button>
     </div>
