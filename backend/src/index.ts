@@ -16,6 +16,7 @@ const startServer = async () => {
   const { IMAGES_DIR } = await import('./db/connection.js')
   const { default: bookmarksRouter } = await import('./routes/bookmarks.js')
   const { default: categoriesRouter } = await import('./routes/categories.js')
+  const { default: widgetsRouter } = await import('./routes/widgets.js')
 
   runMigrations()
 
@@ -28,6 +29,7 @@ const startServer = async () => {
   app.use('/images', express.static(IMAGES_DIR, { maxAge: '7d' }))
   app.use('/api/bookmarks', bookmarksRouter)
   app.use('/api/categories', categoriesRouter)
+  app.use('/api/widgets', widgetsRouter)
 
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok' })

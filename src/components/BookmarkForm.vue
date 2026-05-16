@@ -299,8 +299,9 @@ const handleSubmit = (event: Event) => {
 };
 
 watch(
-  () => props.bookmark,
-  (b) => {
+  () => props.bookmark?.id,
+  () => {
+    const b = props.bookmark;
     if (!b) return;
     name.value = b.name;
     url.value = b.url ?? "";

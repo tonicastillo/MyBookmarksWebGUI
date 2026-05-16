@@ -272,6 +272,7 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
     remove,
     uploadImage,
     removeImage,
+    upsertLocal,
     invalidate
   }
 })

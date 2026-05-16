@@ -11,6 +11,7 @@ import {
   buildDuplicatePayload,
 } from '@/composables/useBookmarkDuplicate'
 import MiniCard from './MiniCard.vue'
+import WidgetRenderer from './widgets/WidgetRenderer.vue'
 
 const router = useRouter()
 const categoriesStore = useCategoriesStore()
@@ -192,6 +193,12 @@ const handleTagClick = (tag: string) => {
       </button>
     </div>
 
+    <WidgetRenderer
+      v-if="parent.widgets && parent.widgets.length > 0"
+      :widgets="parent.widgets"
+      class="megacard-widgets"
+    />
+
     <div v-if="children.length > 0" class="megacard-children">
       <MiniCard v-for="child in children" :key="child.id" :bookmark="child" />
     </div>
@@ -354,6 +361,11 @@ const handleTagClick = (tag: string) => {
   cursor: pointer;
 }
 .card-tag:hover { background: var(--bg-softer, #ecebe5); color: var(--fg, #1c1a14); }
+
+.megacard-widgets {
+  position: relative;
+  z-index: 1;
+}
 
 .megacard-children {
   position: relative;

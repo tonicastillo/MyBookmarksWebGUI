@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import { resolveBookmarkHue } from '@/composables/useColorHue'
 import { useCategoriesStore } from '@/stores/categories'
 import { buildImageStyle } from '@/composables/useImageStyle'
+import WidgetRenderer from './widgets/WidgetRenderer.vue'
 
 const router = useRouter()
 const categoriesStore = useCategoriesStore()
@@ -60,6 +61,8 @@ const stop = (event: Event) => {
   event.stopPropagation()
 }
 
+const hasWidgets = computed(() => Boolean(props.bookmark.widgets && props.bookmark.widgets.length > 0))
+
 const rowTag = computed(() => (hasUrl.value ? 'a' : 'div'))
 
 const imageStyle = computed(() => buildImageStyle(props.bookmark))
@@ -67,7 +70,7 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
 
 <template>
   <div
-    v-if="hasSearch"
+    v-if="hasSearch || hasWidgets"
     class="minicard has-search"
     :class="{ 'no-color': hue === null }"
     :style="hue !== null ? { '--c': hue } : {}"
@@ -94,7 +97,7 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
         </svg>
       </button>
     </component>
-    <form class="card-search" @submit="handleSearchSubmit" @click="stop">
+    <form v-if="hasSearch" class="card-search" @submit="handleSearchSubmit" @click="stop">
       <input
         v-model="searchQuery"
         type="text"
@@ -108,6 +111,11 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
         </svg>
       </button>
     </form>
+    <WidgetRenderer
+      v-if="hasWidgets"
+      :widgets="bookmark.widgets"
+      @click="stop"
+    />
   </div>
 
   <component

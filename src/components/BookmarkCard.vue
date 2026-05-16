@@ -10,6 +10,7 @@ import {
   useBookmarkDuplicate,
   buildDuplicatePayload,
 } from '@/composables/useBookmarkDuplicate'
+import WidgetRenderer from './widgets/WidgetRenderer.vue'
 
 const router = useRouter()
 const categoriesStore = useCategoriesStore()
@@ -162,6 +163,13 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
           </svg>
         </button>
       </form>
+
+      <WidgetRenderer
+        v-if="bookmark.widgets && bookmark.widgets.length > 0"
+        :widgets="bookmark.widgets"
+        class="card-widgets"
+        @click="stopAnchorNav"
+      />
     </div>
 
     <button
@@ -384,5 +392,9 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
   background: var(--fg, #1c1a14);
   color: var(--bg, #faf9f7);
   border-color: var(--fg, #1c1a14);
+}
+
+.card-widgets {
+  margin-top: 7px;
 }
 </style>

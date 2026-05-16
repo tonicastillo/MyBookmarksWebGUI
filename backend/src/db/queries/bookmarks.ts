@@ -1,5 +1,6 @@
 import db from '../connection.js'
-import type { Bookmark } from '../../types/index.js'
+import type { Bookmark, Widget } from '../../types/index.js'
+import { getAllWidgetsByBookmark, getWidgetsByBookmark } from './widgets.js'
 
 interface BookmarkRow {
   id: string
@@ -53,7 +54,11 @@ const parseResboard = (raw: string | null): Record<string, unknown> | undefined 
   }
 }
 
-const rowToBookmark = (row: BookmarkRow, tagsByBookmark: Map<string, string[]>): Bookmark => ({
+const rowToBookmark = (
+  row: BookmarkRow,
+  tagsByBookmark: Map<string, string[]>,
+  widgetsByBookmark: Map<string, Widget[]>
+): Bookmark => ({
   id: row.id,
   name: row.name,
   url: row.url ?? '',
@@ -70,7 +75,8 @@ const rowToBookmark = (row: BookmarkRow, tagsByBookmark: Map<string, string[]>):
   imageScale: row.image_scale ?? undefined,
   imageBgColor: row.image_bg_color ?? undefined,
   imageBgColor2: row.image_bg_color2 ?? undefined,
-  resboard: parseResboard(row.resboard)
+  resboard: parseResboard(row.resboard),
+  widgets: widgetsByBookmark.get(row.id) ?? []
 })
 
 const loadTagsByBookmark = (): Map<string, string[]> => {
@@ -92,14 +98,16 @@ const loadTagsByBookmark = (): Map<string, string[]> => {
 export const getAllBookmarks = (): Bookmark[] => {
   const rows = db.prepare(`SELECT * FROM bookmarks ORDER BY created_at`).all() as BookmarkRow[]
   const tagsByBookmark = loadTagsByBookmark()
-  return rows.map((r) => rowToBookmark(r, tagsByBookmark))
+  const widgetsByBookmark = getAllWidgetsByBookmark()
+  return rows.map((r) => rowToBookmark(r, tagsByBookmark, widgetsByBookmark))
 }
 
 export const getBookmarkById = (id: string): Bookmark | undefined => {
   const row = db.prepare(`SELECT * FROM bookmarks WHERE id = ?`).get(id) as BookmarkRow | undefined
   if (!row) return undefined
   const tagsByBookmark = loadTagsByBookmark()
-  return rowToBookmark(row, tagsByBookmark)
+  const widgetsByBookmark = new Map<string, Widget[]>([[id, getWidgetsByBookmark(id)]])
+  return rowToBookmark(row, tagsByBookmark, widgetsByBookmark)
 }
 
 export interface BookmarkInput {
