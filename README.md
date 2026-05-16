@@ -108,6 +108,21 @@ El proyecto **se hospeda en producción en Dokploy**. Pasos para reproducir el d
 4. Dokploy detectará el Dockerfile automáticamente
 5. Monta un volumen persistente para `backend/data/` (SQLite + imágenes), tal como define `docker-compose.yml` con `bookmarks-data`
 
+## Backup de producción
+
+El script `scripts/backup-prod.sh` descarga un snapshot consistente de la base de datos (`bookmarks.db` con `VACUUM INTO`) y la carpeta de imágenes desde el servidor Dokploy vía SSH + `docker cp`. Los backups se guardan en `backups/` (gitignored) como `mybookmarks-YYYYMMDD-HHMMSS-*.tar.gz` y se rotan dejando los 10 últimos.
+
+```bash
+# Configuración inicial (una vez)
+cp scripts/.env.backup.example scripts/.env.backup
+# Edita scripts/.env.backup con DOKPLOY_SSH=usuario@host y DOKPLOY_SSH_KEY
+
+# Uso
+./scripts/backup-prod.sh                 # backup completo (db + images)
+./scripts/backup-prod.sh --db-only       # solo la base de datos
+./scripts/backup-prod.sh --restore-local # extrae el último backup en backend/data/
+```
+
 ## Estructura del proyecto
 
 ```

@@ -38,6 +38,10 @@ lerna-debug.log*
 # Datos locales (SQLite + imágenes subidas)
 backend/data/
 
+# Backups de producción
+backups/
+scripts/.env.backup
+
 # Test
 coverage
 
