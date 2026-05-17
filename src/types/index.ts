@@ -1,3 +1,11 @@
+export interface Widget {
+  id: string
+  bookmarkId: string
+  type: string
+  order: number
+  config: Record<string, unknown>
+}
+
 export interface Bookmark {
   id: string
   name: string
@@ -31,6 +39,8 @@ export interface Bookmark {
 
   // Generic JSON metadata for the resboard feature.
   resboard?: Record<string, unknown> | null
+
+  widgets?: Widget[]
 }
 
 export interface Category {

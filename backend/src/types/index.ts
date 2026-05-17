@@ -1,3 +1,11 @@
+export interface Widget {
+  id: string
+  bookmarkId: string
+  type: string
+  order: number
+  config: Record<string, unknown>
+}
+
 export interface Bookmark {
   id: string
   name: string
@@ -16,6 +24,7 @@ export interface Bookmark {
   imageBgColor?: string | null
   imageBgColor2?: string | null
   resboard?: Record<string, unknown> | null
+  widgets?: Widget[]
 }
 
 export interface Category {

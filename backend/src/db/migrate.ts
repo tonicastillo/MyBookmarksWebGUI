@@ -54,6 +54,18 @@ CREATE INDEX IF NOT EXISTS idx_bookmark_tags_tag ON bookmark_tags(tag_id);
 CREATE VIRTUAL TABLE IF NOT EXISTS bookmarks_fts USING fts5(
   name, subtitle, tags, content=''
 );
+
+CREATE TABLE IF NOT EXISTS widgets (
+  id           TEXT PRIMARY KEY,
+  bookmark_id  TEXT NOT NULL REFERENCES bookmarks(id) ON DELETE CASCADE,
+  type         TEXT NOT NULL,
+  "order"      INTEGER NOT NULL DEFAULT 0,
+  config       TEXT NOT NULL DEFAULT '{}',
+  created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_widgets_bookmark ON widgets(bookmark_id, "order");
 `
 
 interface Migration {
@@ -150,6 +162,23 @@ const MIGRATIONS: Migration[] = [
       if (!hasColumn(database, 'bookmarks', 'image_bg_color2')) {
         database.exec(`ALTER TABLE bookmarks ADD COLUMN image_bg_color2 TEXT`)
       }
+    }
+  },
+  {
+    version: 5,
+    up: (database) => {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS widgets (
+          id           TEXT PRIMARY KEY,
+          bookmark_id  TEXT NOT NULL REFERENCES bookmarks(id) ON DELETE CASCADE,
+          type         TEXT NOT NULL,
+          "order"      INTEGER NOT NULL DEFAULT 0,
+          config       TEXT NOT NULL DEFAULT '{}',
+          created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_widgets_bookmark ON widgets(bookmark_id, "order");
+      `)
     }
   }
 ]

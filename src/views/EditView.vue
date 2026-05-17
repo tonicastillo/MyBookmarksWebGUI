@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useBookmarksStore } from '@/stores/bookmarks'
 import { useCategoriesStore } from '@/stores/categories'
 import BookmarkForm from '@/components/BookmarkForm.vue'
+import WidgetEditor from '@/components/widgets/WidgetEditor.vue'
 import type { BookmarkInput } from '@/api/notion'
 import {
   useBookmarkDuplicate,
@@ -48,6 +49,7 @@ const handleSubmit = async (payload: { input: BookmarkInput; imageFile: File | n
   submitting.value = true
   errorMessage.value = null
   try {
+    const isCreating = !id.value
     let savedId: string
     if (id.value) {
       const updated = await bookmarksStore.update(id.value, payload.input)
@@ -63,7 +65,11 @@ const handleSubmit = async (payload: { input: BookmarkInput; imageFile: File | n
       await bookmarksStore.removeImage(savedId)
     }
 
-    router.push('/')
+    if (isCreating) {
+      router.replace(`/edit/${savedId}`)
+    } else {
+      router.push('/')
+    }
   } catch (err) {
     errorMessage.value = err instanceof Error ? err.message : 'Error guardando'
   } finally {
@@ -108,6 +114,16 @@ const handleCancel = () => {
       @cancel="handleCancel"
       @delete="handleDelete"
     />
+
+    <WidgetEditor
+      v-if="bookmark"
+      :bookmark-id="bookmark.id"
+      :widgets="bookmark.widgets ?? []"
+      class="widgets-section"
+    />
+    <div v-else class="widgets-placeholder">
+      Guarda el bookmark primero para poder añadirle widgets.
+    </div>
   </div>
 </template>
 
@@ -147,5 +163,18 @@ h1 {
   border-radius: 8px;
   margin-bottom: 16px;
   font-size: 13px;
+}
+.widgets-section {
+  margin-top: 24px;
+}
+.widgets-placeholder {
+  margin-top: 24px;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--fg-faint, #a8a294);
+  padding: 12px 14px;
+  background: var(--bg-soft, #f3f1ec);
+  border-radius: 10px;
+  border: 0.5px dashed var(--border, rgba(28, 26, 20, 0.16));
 }
 </style>
