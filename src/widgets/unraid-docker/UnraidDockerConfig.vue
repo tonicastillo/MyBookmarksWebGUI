@@ -9,15 +9,19 @@ const emit = defineEmits<{
   'update:modelValue': [value: Record<string, unknown>]
 }>()
 
-const cfg = computed(() => props.modelValue as { serverUrl?: string; containerName?: string; apiToken?: string })
+const cfg = computed(() => props.modelValue as { serverUrl?: string; serverLabel?: string; containerName?: string; apiToken?: string })
 
-const update = (patch: Partial<{ serverUrl: string; containerName: string; apiToken: string }>) => {
+const update = (patch: Partial<{ serverUrl: string; serverLabel: string; containerName: string; apiToken: string }>) => {
   emit('update:modelValue', { ...cfg.value, ...patch })
 }
 
 const serverUrl = computed({
   get: () => cfg.value.serverUrl ?? '',
   set: (v: string) => update({ serverUrl: v })
+})
+const serverLabel = computed({
+  get: () => cfg.value.serverLabel ?? '',
+  set: (v: string) => update({ serverLabel: v })
 })
 const containerName = computed({
   get: () => cfg.value.containerName ?? '',
@@ -37,6 +41,16 @@ const apiToken = computed({
         v-model="serverUrl"
         type="url"
         placeholder="https://unraid.local"
+        autocomplete="off"
+      />
+    </label>
+
+    <label class="field">
+      <span class="label">Nombre del servidor (display)</span>
+      <input
+        v-model="serverLabel"
+        type="text"
+        placeholder="Fuji"
         autocomplete="off"
       />
     </label>

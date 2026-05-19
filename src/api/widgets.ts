@@ -45,8 +45,8 @@ export interface UnraidContainerInfo {
   autoStart: boolean | null
   sizeRootFs: number | null
   cpuPercent: number | null
-  memoryBytes: number | null
-  memoryLimitBytes: number | null
+  memPercent: number | null
+  memUsage: string | null
 }
 
 export type UnraidAction = 'start' | 'stop' | 'restart'

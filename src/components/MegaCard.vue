@@ -372,6 +372,7 @@ const handleTagClick = (tag: string) => {
   z-index: 1;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  align-items: start;
   gap: 6px;
   padding-top: 4px;
   border-top: 0.5px solid var(--border, rgba(28, 26, 20, 0.08));

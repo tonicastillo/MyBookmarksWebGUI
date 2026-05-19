@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref, watch, watchEffect } from "vue";
 import type { Bookmark } from "@/types";
 import { useCategoriesStore } from "@/stores/categories";
 import { useBookmarksStore } from "@/stores/bookmarks";
@@ -52,7 +52,9 @@ const parentBookmarkId = ref(
     props.defaultParentBookmarkId ??
     "",
 );
-const visibleAtStart = ref(props.bookmark?.visibleAtStart ?? p?.visibleAtStart ?? true);
+const visibleAtStart = ref(
+  props.bookmark?.visibleAtStart ?? p?.visibleAtStart ?? true,
+);
 const isMegaCard = ref(props.bookmark?.isMegaCard ?? p?.isMegaCard ?? false);
 const color = ref<string | null>(props.bookmark?.color ?? p?.color ?? null);
 const searchPlaceholder = ref(
@@ -68,7 +70,9 @@ const imageFile = ref<File | null>(null);
 const imagePreview = ref<string | null>(null);
 const removeImage = ref(false);
 
-const imageScale = ref<number>(props.bookmark?.imageScale ?? p?.imageScale ?? 1);
+const imageScale = ref<number>(
+  props.bookmark?.imageScale ?? p?.imageScale ?? 1,
+);
 const imageBgColor = ref<string | null>(
   props.bookmark?.imageBgColor ?? p?.imageBgColor ?? null,
 );
@@ -178,28 +182,187 @@ const handleImageChange = (event: Event) => {
     imagePreview.value = reader.result as string;
   };
   reader.readAsDataURL(file);
+  if (file.type === "image/svg+xml") {
+    loadSvgFromFile(file);
+  } else {
+    svgContent.value = null;
+    svgModified.value = false;
+    selectedSvgColors.value = new Set();
+  }
 };
 
 const handleRemoveImage = () => {
   imageFile.value = null;
   imagePreview.value = null;
   removeImage.value = true;
+  svgContent.value = null;
+  svgModified.value = false;
+  selectedSvgColors.value = new Set();
 };
 
 const { clipboard, hasClipboard, setClipboard } = useImageClipboard();
 
-const toolbarOpen = ref(false);
-const toggleToolbar = () => {
-  toolbarOpen.value = !toolbarOpen.value;
+const svgContent = ref<string | null>(null);
+const svgModified = ref(false);
+const selectedSvgColors = ref<Set<string>>(new Set());
+
+const SKIP_COLOR = new Set([
+  "none",
+  "transparent",
+  "currentcolor",
+  "inherit",
+  "",
+]);
+
+const NAMED_COLORS: Record<string, string> = {
+  black: "#000000",
+  white: "#ffffff",
+  red: "#ff0000",
+  green: "#008000",
+  blue: "#0000ff",
+  yellow: "#ffff00",
+  cyan: "#00ffff",
+  magenta: "#ff00ff",
+  gray: "#808080",
+  grey: "#808080",
+  silver: "#c0c0c0",
+  maroon: "#800000",
+  olive: "#808000",
+  lime: "#00ff00",
+  aqua: "#00ffff",
+  teal: "#008080",
+  navy: "#000080",
+  fuchsia: "#ff00ff",
+  purple: "#800080",
+  orange: "#ffa500",
 };
-const closeToolbar = () => {
-  toolbarOpen.value = false;
+
+const normalizeColor = (raw: string): string => {
+  const v = raw.trim().toLowerCase();
+  if (/^#[0-9a-f]{3}$/.test(v)) {
+    return (
+      "#" +
+      v
+        .slice(1)
+        .split("")
+        .map((c) => c + c)
+        .join("")
+    );
+  }
+  if (/^#[0-9a-f]{6}$/.test(v)) return v;
+  if (/^#[0-9a-f]{8}$/.test(v)) return v.slice(0, 7);
+  const rgb = v.match(/^rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/);
+  if (rgb) {
+    const toHex = (n: string) => Number(n).toString(16).padStart(2, "0");
+    return `#${toHex(rgb[1])}${toHex(rgb[2])}${toHex(rgb[3])}`;
+  }
+  if (NAMED_COLORS[v]) return NAMED_COLORS[v];
+  return v;
 };
+
+const HEX_RGB_RE =
+  /#[0-9a-fA-F]{8}\b|#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b|rgba?\(\s*\d+[\s,]+\d+[\s,]+\d+(?:[\s,/]+[\d.%]+)?\s*\)/g;
+const NAMED_PROP_RE =
+  /(fill|stroke|stop-color|flood-color|lighting-color|color)(\s*[:=]\s*)(["']?)([a-zA-Z]+)\3/gi;
+
+const parseColorsFromSvg = (svgText: string): string[] => {
+  const colors = new Set<string>();
+  const hexMatches = svgText.match(HEX_RGB_RE);
+  if (hexMatches) hexMatches.forEach((m) => colors.add(normalizeColor(m)));
+  for (const m of svgText.matchAll(NAMED_PROP_RE)) {
+    const name = m[4].toLowerCase();
+    if (SKIP_COLOR.has(name)) continue;
+    if (NAMED_COLORS[name]) colors.add(NAMED_COLORS[name]);
+  }
+  return [...colors];
+};
+
+const replaceColorsInSvg = (
+  svgText: string,
+  from: Set<string>,
+  to: string,
+): string => {
+  let result = svgText.replace(HEX_RGB_RE, (match) =>
+    from.has(normalizeColor(match)) ? to : match,
+  );
+  result = result.replace(NAMED_PROP_RE, (match, prop, sep, quote, name) => {
+    const hex = NAMED_COLORS[name.toLowerCase()];
+    if (hex && from.has(hex)) return `${prop}${sep}${quote}${to}${quote}`;
+    return match;
+  });
+  return result;
+};
+
+const sanitizeSvg = (svgText: string): string =>
+  svgText.replace(/<script[\s\S]*?<\/script>/gi, "");
+
+const svgColors = computed(() =>
+  svgContent.value ? parseColorsFromSvg(svgContent.value) : [],
+);
+
+const toggleSvgColor = (color: string) => {
+  const next = new Set(selectedSvgColors.value);
+  if (next.has(color)) next.delete(color);
+  else next.add(color);
+  selectedSvgColors.value = next;
+};
+
+const applySvgColor = (newColor: string | null) => {
+  if (!newColor || !svgContent.value || selectedSvgColors.value.size === 0)
+    return;
+  svgContent.value = replaceColorsInSvg(
+    svgContent.value,
+    selectedSvgColors.value,
+    newColor,
+  );
+  svgModified.value = true;
+  selectedSvgColors.value = new Set();
+};
+
+const loadSvgFromFile = (file: File) => {
+  const reader = new FileReader();
+  reader.onload = () => {
+    svgContent.value = sanitizeSvg(reader.result as string);
+    svgModified.value = false;
+    selectedSvgColors.value = new Set();
+  };
+  reader.readAsText(file);
+};
+
+const isSvgUrl = (url: string): boolean => {
+  const path = url.split("?")[0].split("#")[0].toLowerCase();
+  return path.endsWith(".svg");
+};
+
+watchEffect(async () => {
+  const remote = props.bookmark?.imageUrl;
+  if (!remote || imageFile.value || removeImage.value) return;
+  if (!isSvgUrl(remote)) return;
+  if (svgContent.value) return;
+  try {
+    const res = await fetch(remote);
+    if (!res.ok) {
+      console.warn("[SVG] fetch falló:", res.status, remote);
+      return;
+    }
+    const text = await res.text();
+    svgContent.value = sanitizeSvg(text);
+    svgModified.value = false;
+    selectedSvgColors.value = new Set();
+  } catch (err) {
+    console.warn("[SVG] error al cargar:", err);
+  }
+});
 
 const handleCopy = async () => {
   let imageDataUrl: string | null = null;
   let imageMimeType: string | null = null;
-  if (imageFile.value) {
+  if (svgModified.value && svgContent.value) {
+    imageMimeType = "image/svg+xml";
+    imageDataUrl =
+      "data:image/svg+xml;base64," +
+      btoa(unescape(encodeURIComponent(svgContent.value)));
+  } else if (imageFile.value) {
     imageMimeType = imageFile.value.type;
     imageDataUrl = await new Promise<string | null>((resolve) => {
       const reader = new FileReader();
@@ -237,11 +400,21 @@ const handlePaste = () => {
       imageFile.value = file;
       imagePreview.value = data.imageDataUrl;
       removeImage.value = false;
+      if (data.imageMimeType === "image/svg+xml") {
+        loadSvgFromFile(file);
+      } else {
+        svgContent.value = null;
+        svgModified.value = false;
+        selectedSvgColors.value = new Set();
+      }
     }
   } else {
     imageFile.value = null;
     imagePreview.value = null;
     removeImage.value = true;
+    svgContent.value = null;
+    svgModified.value = false;
+    selectedSvgColors.value = new Set();
   }
 };
 
@@ -275,6 +448,15 @@ watch(isMegaCard, (value) => {
 
 const handleSubmit = (event: Event) => {
   event.preventDefault();
+  if (svgModified.value && svgContent.value) {
+    const blob = new Blob([svgContent.value], { type: "image/svg+xml" });
+    const fileName = imageFile.value?.name ?? "edited.svg";
+    imageFile.value = new File([blob], fileName, { type: "image/svg+xml" });
+    imagePreview.value =
+      "data:image/svg+xml;base64," +
+      btoa(unescape(encodeURIComponent(svgContent.value)));
+    removeImage.value = false;
+  }
   const input: BookmarkInput = {
     name: name.value.trim(),
     url: url.value.trim() || null,
@@ -326,253 +508,277 @@ watch(
   <form class="bm-form" @submit="handleSubmit">
     <div class="form-grid">
       <div class="image-block">
-        <div
-          class="image-preview"
-          :class="{ 'toolbar-open': toolbarOpen }"
-          :style="previewStyle.thumb"
-          @click="closeToolbar"
-        >
+        <div class="image-preview" :style="previewStyle.thumb">
+          <div
+            v-if="svgContent"
+            class="image-svg"
+            :style="previewStyle.img"
+            v-html="svgContent"
+          />
           <img
-            v-if="currentImageUrl"
+            v-else-if="currentImageUrl"
             :src="currentImageUrl"
             :alt="name"
             :style="previewStyle.img"
           />
           <span v-else class="image-placeholder">Sin imagen</span>
+        </div>
 
-          <button
-            type="button"
-            class="toolbar-fab"
-            :class="{ 'is-open': toolbarOpen }"
-            :title="toolbarOpen ? 'Cerrar acciones' : 'Mostrar acciones'"
-            :aria-label="toolbarOpen ? 'Cerrar acciones' : 'Mostrar acciones'"
-            @click.stop="toggleToolbar"
-          >
-            <svg
-              v-if="!toolbarOpen"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.5"
-              stroke-linecap="round"
+        <div class="image-toolbar">
+          <div class="tb-row">
+            <a
+              :href="dashboardIconsUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="tb-btn"
+              title="Buscar icono en dashboardicons.com"
+              aria-label="Buscar icono"
             >
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            <svg
-              v-else
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.5"
-              stroke-linecap="round"
-            >
-              <line x1="6" y1="6" x2="18" y2="18" />
-              <line x1="6" y1="18" x2="18" y2="6" />
-            </svg>
-          </button>
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+            </a>
 
-          <div class="image-toolbar" @click.stop>
-            <div class="tb-row">
-              <a
-                :href="dashboardIconsUrl"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="tb-btn"
-                title="Buscar icono en dashboardicons.com"
-                aria-label="Buscar icono"
+            <label
+              class="tb-color"
+              :title="imageBgColor ? `Color 1: ${imageBgColor}` : 'Color 1'"
+            >
+              <span
+                class="tb-swatch"
+                :style="{ background: imageBgColor || 'transparent' }"
               >
                 <svg
-                  width="13"
-                  height="13"
+                  v-if="!imageBgColor"
+                  width="11"
+                  height="11"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
-                  stroke-width="2"
+                  stroke-width="2.5"
                   stroke-linecap="round"
-                  stroke-linejoin="round"
                 >
-                  <circle cx="11" cy="11" r="7" />
-                  <path d="m21 21-4.3-4.3" />
+                  <line x1="4" y1="20" x2="20" y2="4" />
                 </svg>
-              </a>
+              </span>
+              <input type="color" v-model="bgColor1Hex" />
+            </label>
 
-              <label
-                class="tb-color"
-                :title="imageBgColor ? `Color 1: ${imageBgColor}` : 'Color 1'"
-              >
-                <span
-                  class="tb-swatch"
-                  :style="{ background: imageBgColor || 'transparent' }"
-                >
-                  <svg
-                    v-if="!imageBgColor"
-                    width="11"
-                    height="11"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.5"
-                    stroke-linecap="round"
-                  >
-                    <line x1="4" y1="20" x2="20" y2="4" />
-                  </svg>
-                </span>
-                <input type="color" v-model="bgColor1Hex" />
-              </label>
+            <button
+              type="button"
+              class="tb-btn tb-toggle"
+              :class="{ active: useGradient }"
+              :title="
+                useGradient
+                  ? 'Quitar segundo color'
+                  : 'Añadir segundo color (degradado)'
+              "
+              @click="toggleGradient"
+            >
+              <span v-if="!useGradient">+</span>
+              <span v-else>×</span>
+            </button>
 
-              <button
-                type="button"
-                class="tb-btn tb-toggle"
-                :class="{ active: useGradient }"
-                :title="
-                  useGradient
-                    ? 'Quitar segundo color'
-                    : 'Añadir segundo color (degradado)'
-                "
-                @click="toggleGradient"
-              >
-                <span v-if="!useGradient">+</span>
-                <span v-else>×</span>
-              </button>
+            <label
+              v-if="useGradient"
+              class="tb-color"
+              :title="imageBgColor2 ? `Color 2: ${imageBgColor2}` : 'Color 2'"
+            >
+              <span
+                class="tb-swatch"
+                :style="{ background: imageBgColor2 || 'transparent' }"
+              ></span>
+              <input type="color" v-model="bgColor2Hex" />
+            </label>
 
-              <label
-                v-if="useGradient"
-                class="tb-color"
-                :title="imageBgColor2 ? `Color 2: ${imageBgColor2}` : 'Color 2'"
-              >
-                <span
-                  class="tb-swatch"
-                  :style="{ background: imageBgColor2 || 'transparent' }"
-                ></span>
-                <input type="color" v-model="bgColor2Hex" />
-              </label>
-
-              <div
-                class="tb-slider"
-                :title="`Escala: ${Math.round(imageScale * 100)}%`"
-              >
-                <input
-                  v-model.number="imageScale"
-                  type="range"
-                  min="0.5"
-                  max="1"
-                  step="0.05"
-                />
-              </div>
-
-              <button
-                type="button"
-                class="tb-btn tb-clear"
-                :disabled="!imageBgColor && !imageBgColor2 && imageScale >= 1"
-                title="Restablecer estilo"
-                @click="
-                  handleClearBg();
-                  imageScale = 1;
-                "
-              >
-                ⟲
-              </button>
+            <div
+              class="tb-slider"
+              :title="`Escala: ${Math.round(imageScale * 100)}%`"
+            >
+              <input
+                v-model.number="imageScale"
+                type="range"
+                min="0.5"
+                max="1"
+                step="0.05"
+              />
             </div>
 
-            <div class="tb-row">
-              <label class="tb-btn tb-file" title="Subir imagen" aria-label="Subir imagen">
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="17 8 12 3 7 8" />
-                  <line x1="12" y1="3" x2="12" y2="15" />
-                </svg>
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif,image/avif"
-                  hidden
-                  @change="handleImageChange"
+            <button
+              type="button"
+              class="tb-btn tb-clear"
+              :disabled="!imageBgColor && !imageBgColor2 && imageScale >= 1"
+              title="Restablecer estilo"
+              @click="
+                handleClearBg();
+                imageScale = 1;
+              "
+            >
+              ⟲
+            </button>
+          </div>
+
+          <div class="tb-row">
+            <label
+              class="tb-btn tb-file"
+              title="Subir imagen"
+              aria-label="Subir imagen"
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif,image/avif"
+                hidden
+                @change="handleImageChange"
+              />
+            </label>
+
+            <button
+              type="button"
+              class="tb-btn"
+              :disabled="!currentImageUrl"
+              title="Quitar imagen"
+              aria-label="Quitar imagen"
+              @click="handleRemoveImage"
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                <path d="M10 11v6" />
+                <path d="M14 11v6" />
+              </svg>
+            </button>
+
+            <button
+              type="button"
+              class="tb-btn"
+              title="Copiar bookmark"
+              aria-label="Copiar bookmark"
+              @click="handleCopy"
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                <path
+                  d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
                 />
-              </label>
+              </svg>
+            </button>
 
-              <button
-                type="button"
-                class="tb-btn"
-                :disabled="!currentImageUrl"
-                title="Quitar imagen"
-                aria-label="Quitar imagen"
-                @click="handleRemoveImage"
+            <button
+              type="button"
+              class="tb-btn"
+              :disabled="!hasClipboard"
+              title="Pegar bookmark"
+              aria-label="Pegar bookmark"
+              @click="handlePaste"
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
               >
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <polyline points="3 6 5 6 21 6" />
-                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                  <path d="M10 11v6" />
-                  <path d="M14 11v6" />
-                </svg>
-              </button>
+                <path
+                  d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"
+                />
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+              </svg>
+            </button>
+          </div>
 
-              <button
-                type="button"
-                class="tb-btn"
-                title="Copiar bookmark"
-                aria-label="Copiar bookmark"
-                @click="handleCopy"
+          <div v-if="svgColors.length > 0" class="tb-row tb-row-svg">
+            <label
+              class="tb-svg-trigger"
+              :class="{ disabled: selectedSvgColors.size === 0 }"
+              :title="
+                selectedSvgColors.size === 0
+                  ? 'Selecciona uno o más colores'
+                  : `Cambiar color (${selectedSvgColors.size} seleccionados)`
+              "
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
               >
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                </svg>
-              </button>
-
-              <button
-                type="button"
-                class="tb-btn"
-                :disabled="!hasClipboard"
-                title="Pegar bookmark"
-                aria-label="Pegar bookmark"
-                @click="handlePaste"
-              >
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-                  <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
-                </svg>
-              </button>
-            </div>
+                <circle cx="13.5" cy="6.5" r="2.5" />
+                <circle cx="17.5" cy="10.5" r="2.5" />
+                <circle cx="8.5" cy="7.5" r="2.5" />
+                <circle cx="6.5" cy="12.5" r="2.5" />
+                <path
+                  d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.93 0 1.5-.77 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.27-.38-.62-.38-1.01 0-.83.67-1.5 1.5-1.5H16c3.31 0 6-2.69 6-6 0-4.96-4.5-9-10-9z"
+                />
+              </svg>
+              <input
+                type="color"
+                :disabled="selectedSvgColors.size === 0"
+                aria-label="Cambiar color de elementos seleccionados"
+                @input="
+                  applySvgColor(($event.target as HTMLInputElement).value)
+                "
+              />
+            </label>
+            <button
+              v-for="c in svgColors"
+              :key="c"
+              type="button"
+              class="tb-svg-color"
+              :class="{ selected: selectedSvgColors.has(c) }"
+              :style="{ background: c }"
+              :title="c"
+              :aria-label="`Color ${c}`"
+              :aria-pressed="selectedSvgColors.has(c)"
+              @click="toggleSvgColor(c)"
+            />
           </div>
         </div>
       </div>
@@ -738,100 +944,37 @@ watch(
   overflow: hidden;
   position: relative;
 }
-.image-preview img {
+.image-preview img,
+.image-svg {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
+.image-svg :deep(svg) {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
 
 .image-toolbar {
-  position: absolute;
-  left: 6px;
-  right: 6px;
-  bottom: 6px;
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  padding: 6px 7px;
+  gap: 6px;
+  padding: 8px;
   border-radius: 10px;
-  background: rgba(20, 18, 14, 0.78);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  color: #fff;
-  opacity: 0;
-  transform: translateY(2px);
-  transition:
-    opacity 140ms ease,
-    transform 140ms ease;
-  pointer-events: none;
+  background: var(--bg-soft, #f3f1ec);
+  border: 0.5px solid var(--border, rgba(28, 26, 20, 0.08));
+  color: var(--fg, #1c1a14);
 }
 .tb-row {
   display: flex;
   align-items: center;
   gap: 6px;
 }
-@media (hover: hover) and (pointer: fine) {
-  .image-preview:hover .image-toolbar,
-  .image-preview:focus-within .image-toolbar {
-    opacity: 1;
-    transform: translateY(0);
-    pointer-events: auto;
-  }
-}
-.image-preview.toolbar-open .image-toolbar {
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto;
-}
-
-.toolbar-fab {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 28px;
-  height: 28px;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 50%;
-  background: rgba(20, 18, 14, 0.78);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  color: #fff;
-  cursor: pointer;
-  padding: 0;
-  z-index: 2;
-  transition: background 120ms ease;
-}
-.toolbar-fab:hover {
-  background: rgba(20, 18, 14, 0.9);
-}
-.toolbar-fab.is-open {
-  background: rgba(255, 255, 255, 0.92);
-  color: #1c1a14;
-}
-@media (hover: none), (max-width: 720px) {
-  .toolbar-fab {
-    display: flex;
-  }
-  .image-preview .image-toolbar {
-    opacity: 0;
-    transform: translateY(2px);
-    pointer-events: none;
-  }
-  .image-preview:hover .image-toolbar,
-  .image-preview:focus-within .image-toolbar {
-    opacity: 0;
-    transform: translateY(2px);
-    pointer-events: none;
-  }
-  .image-preview.toolbar-open .image-toolbar {
-    opacity: 1;
-    transform: translateY(0);
-    pointer-events: auto;
-  }
+.tb-row-svg {
+  flex-wrap: wrap;
+  row-gap: 6px;
 }
 
 .tb-btn {
@@ -839,26 +982,31 @@ watch(
   height: 22px;
   display: grid;
   place-items: center;
-  border: 0;
+  border: 0.5px solid var(--border, rgba(28, 26, 20, 0.16));
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+  background: var(--bg-elev, #ffffff);
+  color: var(--fg, #1c1a14);
   cursor: pointer;
   font-size: 13px;
   line-height: 1;
   text-decoration: none;
   flex-shrink: 0;
-  transition: background 120ms ease;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
 }
 .tb-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--bg-softer, #ecebe5);
+  border-color: var(--border-strong, rgba(28, 26, 20, 0.24));
 }
 .tb-btn:disabled {
-  opacity: 0.35;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 .tb-toggle.active {
-  background: rgba(255, 255, 255, 0.28);
+  background: var(--fg, #1c1a14);
+  color: var(--bg, #faf9f7);
+  border-color: var(--fg, #1c1a14);
 }
 .tb-file {
   position: relative;
@@ -872,6 +1020,7 @@ watch(
   cursor: pointer;
   flex-shrink: 0;
   overflow: hidden;
+  border: 0.5px solid var(--border, rgba(28, 26, 20, 0.16));
 }
 .tb-swatch {
   position: absolute;
@@ -879,9 +1028,8 @@ watch(
   display: grid;
   place-items: center;
   border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  background: repeating-conic-gradient(#888 0 25%, #444 0 50%) 50% / 8px 8px;
-  color: rgba(255, 255, 255, 0.85);
+  background: repeating-conic-gradient(#bbb 0 25%, #ddd 0 50%) 50% / 8px 8px;
+  color: var(--fg-soft, #7a7468);
 }
 .tb-color input[type="color"] {
   position: absolute;
@@ -906,12 +1054,76 @@ watch(
   height: 18px;
   margin: 0;
   cursor: pointer;
-  accent-color: #fff;
+  accent-color: var(--fg, #1c1a14);
   background: transparent;
 }
 
 .tb-clear {
   font-size: 14px;
+}
+
+.tb-svg-color {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 0.5px solid var(--border-strong, rgba(28, 26, 20, 0.24));
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+.tb-svg-color:hover {
+  transform: scale(1.08);
+}
+.tb-svg-color.selected {
+  outline: 2px solid var(--fg, #1c1a14);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 1px var(--bg-elev, #ffffff) inset;
+}
+
+.tb-svg-trigger {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 0.5px solid var(--border, rgba(28, 26, 20, 0.16));
+  border-radius: 6px;
+  background: var(--bg-elev, #ffffff);
+  color: var(--fg, #1c1a14);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+.tb-svg-trigger:hover {
+  background: var(--bg-softer, #ecebe5);
+  border-color: var(--border-strong, rgba(28, 26, 20, 0.24));
+}
+.tb-svg-trigger.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.tb-svg-trigger.disabled:hover {
+  background: var(--bg-elev, #ffffff);
+  border-color: var(--border, rgba(28, 26, 20, 0.16));
+}
+.tb-svg-trigger input[type="color"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  opacity: 0;
+  cursor: pointer;
+}
+.tb-svg-trigger input[type="color"]:disabled {
+  cursor: not-allowed;
 }
 .image-placeholder {
   font-size: 12px;

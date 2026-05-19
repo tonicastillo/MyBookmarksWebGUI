@@ -28,6 +28,7 @@ export const WIDGET_TYPES: WidgetTypeDef[] = [
     description: 'Controla un contenedor de un servidor Unraid (start/stop/restart) y muestra su estado.',
     defaultConfig: {
       serverUrl: '',
+      serverLabel: '',
       containerName: '',
       apiToken: ''
     },

@@ -1,7 +1,10 @@
+import WebSocket from 'ws'
+
 export interface UnraidWidgetConfig {
   serverUrl: string
   containerName: string
   apiToken: string
+  serverLabel?: string
 }
 
 export type UnraidActionName = 'start' | 'stop' | 'restart'
@@ -15,8 +18,8 @@ export interface UnraidContainerInfo {
   autoStart: boolean | null
   sizeRootFs: number | null
   cpuPercent: number | null
-  memoryBytes: number | null
-  memoryLimitBytes: number | null
+  memPercent: number | null
+  memUsage: string | null
 }
 
 const normalizeEndpoint = (serverUrl: string): string => {
@@ -111,8 +114,8 @@ export const fetchUnraidContainer = async (config: UnraidWidgetConfig): Promise<
       autoStart: null,
       sizeRootFs: null,
       cpuPercent: null,
-      memoryBytes: null,
-      memoryLimitBytes: null
+      memPercent: null,
+      memUsage: null
     }
   }
 
@@ -125,6 +128,11 @@ export const fetchUnraidContainer = async (config: UnraidWidgetConfig): Promise<
     return config.containerName
   })()
 
+  const stats = found.id ? await fetchContainerStats(config, found.id).catch((err) => {
+    console.warn('[unraid] stats fetch failed:', err instanceof Error ? err.message : err)
+    return null
+  }) : null
+
   return {
     id: found.id ?? null,
     name: displayName,
@@ -133,10 +141,105 @@ export const fetchUnraidContainer = async (config: UnraidWidgetConfig): Promise<
     status: found.status ?? null,
     autoStart: found.autoStart ?? null,
     sizeRootFs: found.sizeRootFs ?? null,
-    cpuPercent: null,
-    memoryBytes: null,
-    memoryLimitBytes: null
+    cpuPercent: stats?.cpuPercent ?? null,
+    memPercent: stats?.memPercent ?? null,
+    memUsage: stats?.memUsage ?? null
   }
+}
+
+interface ContainerStatsSample {
+  id: string
+  cpuPercent: number
+  memPercent: number
+  memUsage: string
+}
+
+const STATS_SUBSCRIPTION = `
+  subscription Stats {
+    dockerContainerStats {
+      id
+      cpuPercent
+      memPercent
+      memUsage
+    }
+  }
+`
+
+const fetchContainerStats = (config: UnraidWidgetConfig, containerId: string): Promise<ContainerStatsSample> => {
+  const endpoint = normalizeEndpoint(config.serverUrl)
+  const wsUrl = endpoint.replace(/^http(s?):/i, 'ws$1:')
+  const origin = new URL(endpoint).origin
+
+  return new Promise<ContainerStatsSample>((resolve, reject) => {
+    const ws = new WebSocket(wsUrl, 'graphql-transport-ws', {
+      headers: { 'x-api-key': config.apiToken, Origin: origin }
+    })
+
+    const subId = '1'
+    let settled = false
+    const finish = (fn: () => void) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      try { ws.close(1000) } catch { /* noop */ }
+      fn()
+    }
+
+    const timeout = setTimeout(() => {
+      finish(() => reject(new Error('Timeout esperando stats del contenedor')))
+    }, 8000)
+
+    ws.on('open', () => {
+      ws.send(JSON.stringify({
+        type: 'connection_init',
+        payload: { 'x-api-key': config.apiToken }
+      }))
+    })
+
+    ws.on('message', (raw) => {
+      let msg: { type?: string; id?: string; payload?: unknown }
+      try {
+        msg = JSON.parse(raw.toString())
+      } catch {
+        return
+      }
+
+      if (msg.type === 'connection_ack') {
+        ws.send(JSON.stringify({
+          id: subId,
+          type: 'subscribe',
+          payload: { query: STATS_SUBSCRIPTION }
+        }))
+        return
+      }
+
+      if (msg.type === 'next' && msg.id === subId) {
+        const payload = msg.payload as { data?: { dockerContainerStats?: ContainerStatsSample } } | undefined
+        const sample = payload?.data?.dockerContainerStats
+        if (sample && sample.id === containerId) {
+          finish(() => resolve(sample))
+        }
+        return
+      }
+
+      if (msg.type === 'error') {
+        finish(() => reject(new Error(`GraphQL WS error: ${JSON.stringify(msg.payload)}`)))
+        return
+      }
+
+      if (msg.type === 'connection_error') {
+        finish(() => reject(new Error(`GraphQL WS connection_error: ${JSON.stringify(msg.payload)}`)))
+      }
+    })
+
+    ws.on('error', (err) => {
+      finish(() => reject(err instanceof Error ? err : new Error(String(err))))
+    })
+
+    ws.on('close', () => {
+      finish(() => reject(new Error('WebSocket cerrado antes de recibir stats')))
+    })
+  })
 }
 
 const ACTION_MUTATIONS: Record<UnraidActionName, string> = {
