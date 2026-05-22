@@ -260,6 +260,7 @@ const isFilterActiveForIds = (ids: string[]): boolean => {
 
 <template>
   <aside class="sidebar" :class="{ 'is-open': open }">
+    <div class="sidebar-scroll">
     <a
       href="/"
       class="brand"
@@ -311,34 +312,47 @@ const isFilterActiveForIds = (ids: string[]): boolean => {
       <button class="quick-btn primary" @click="goTo('/edit')">
         + Nuevo bookmark
       </button>
-      <button class="quick-btn" @click="goTo('/categories')">
-        Gestionar categorías
-      </button>
     </div>
 
-    <div v-if="auth.currentUser" class="session">
-      <div class="session-info">
-        <span class="session-user">{{ auth.currentUser.username }}</span>
-        <span v-if="auth.currentUser.isAdmin" class="session-badge">admin</span>
-      </div>
-      <div class="session-actions">
+    <nav class="nav">
+      <div class="nav-label-row">
+        <div class="nav-label">CATEGORIES</div>
         <button
-          v-if="auth.isAdmin"
           type="button"
-          class="session-btn"
-          @click="goTo('/admin/users')"
+          class="manage-cats-btn"
+          aria-label="Gestionar categorías"
+          title="Gestionar categorías"
+          @click="goTo('/categories')"
         >
-          Usuarios
-        </button>
-        <button type="button" class="session-btn" @click="onLogout">
-          Salir
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <line x1="4" y1="6" x2="14" y2="6" />
+            <line x1="18" y1="6" x2="20" y2="6" />
+            <circle cx="16" cy="6" r="2" />
+            <line x1="4" y1="12" x2="8" y2="12" />
+            <line x1="12" y1="12" x2="20" y2="12" />
+            <circle cx="10" cy="12" r="2" />
+            <line x1="4" y1="18" x2="14" y2="18" />
+            <line x1="18" y1="18" x2="20" y2="18" />
+            <circle cx="16" cy="18" r="2" />
+          </svg>
         </button>
       </div>
-    </div>
-
-    <nav v-if="items.length > 0" class="nav">
-      <div class="nav-label">CATEGORIES</div>
-      <ul class="nav-list">
+      <p v-if="items.length === 0" class="nav-empty">
+        Aún no hay categorías.
+        <button type="button" class="nav-empty-link" @click="goTo('/categories')">
+          Crea la primera
+        </button>
+      </p>
+      <ul v-else class="nav-list">
         <li v-for="item in items" :key="item.id" class="nav-li">
           <div
             class="nav-row"
@@ -432,6 +446,59 @@ const isFilterActiveForIds = (ids: string[]): boolean => {
         </li>
       </ul>
     </nav>
+    </div>
+
+    <div v-if="auth.currentUser" class="session">
+      <span class="session-user">{{ auth.currentUser.username }}</span>
+      <div class="session-actions">
+        <button
+          v-if="auth.isAdmin"
+          type="button"
+          class="session-icon-btn"
+          aria-label="Gestionar usuarios"
+          title="Gestionar usuarios"
+          @click="goTo('/admin/users')"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="session-icon-btn"
+          aria-label="Cerrar sesión"
+          title="Cerrar sesión"
+          @click="onLogout"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
+        </button>
+      </div>
+    </div>
   </aside>
 </template>
 
@@ -439,13 +506,20 @@ const isFilterActiveForIds = (ids: string[]): boolean => {
 .sidebar {
   width: 260px;
   flex-shrink: 0;
-  padding: 22px 14px 22px 18px;
   border-right: 0.5px solid var(--border, rgba(28, 26, 20, 0.08));
   background: var(--bg, #faf9f7);
   position: sticky;
   top: 0;
   height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-scroll {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  padding: 22px 14px 12px 18px;
 }
 
 @media (max-width: 900px) {
@@ -457,7 +531,6 @@ const isFilterActiveForIds = (ids: string[]): boolean => {
     height: 100dvh;
     width: 280px;
     max-width: 86vw;
-    padding-top: 56px;
     z-index: 50;
     transform: translateX(-100%);
     transition: transform 220ms ease;
@@ -465,6 +538,9 @@ const isFilterActiveForIds = (ids: string[]): boolean => {
   }
   .sidebar.is-open {
     transform: translateX(0);
+  }
+  .sidebar-scroll {
+    padding-top: 56px;
   }
 }
 
@@ -500,20 +576,17 @@ const isFilterActiveForIds = (ids: string[]): boolean => {
 }
 
 .session {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 0 6px 14px;
-  padding: 10px 10px;
-  border-radius: 8px;
-  background: var(--bg-soft, #f3f1ec);
-}
-.session-info {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  padding: 10px 14px 10px 18px;
+  border-top: 0.5px solid var(--border, rgba(28, 26, 20, 0.08));
+  background: var(--bg, #faf9f7);
 }
 .session-user {
+  flex: 1;
+  min-width: 0;
   font-size: 13px;
   font-weight: 600;
   color: var(--fg, #1c1a14);
@@ -521,33 +594,26 @@ const isFilterActiveForIds = (ids: string[]): boolean => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.session-badge {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: rgba(28, 26, 20, 0.1);
-  color: var(--fg-mid, #4a463c);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
 .session-actions {
   display: flex;
-  gap: 6px;
+  gap: 2px;
+  flex-shrink: 0;
 }
-.session-btn {
-  font: inherit;
-  font-size: 11.5px;
-  padding: 5px 8px;
+.session-icon-btn {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
   border-radius: 6px;
-  border: 0.5px solid var(--border, rgba(28, 26, 20, 0.12));
-  background: var(--bg, #faf9f7);
+  background: transparent;
   color: var(--fg-mid, #4a463c);
   cursor: pointer;
   transition: background 120ms ease, color 120ms ease;
 }
-.session-btn:hover {
-  background: var(--bg-elev, #ffffff);
+.session-icon-btn:hover {
+  background: var(--bg-soft, #f3f1ec);
   color: var(--fg, #1c1a14);
 }
 
@@ -586,13 +652,35 @@ const isFilterActiveForIds = (ids: string[]): boolean => {
   color: var(--bg, #faf9f7);
 }
 
+.nav-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px 0 8px;
+  margin-bottom: 8px;
+}
 .nav-label {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.08em;
   color: var(--fg-faint, #a8a294);
-  padding: 0 8px;
-  margin-bottom: 8px;
+}
+.manage-cats-btn {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg-faint, #a8a294);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.manage-cats-btn:hover {
+  background: var(--bg-soft, #f3f1ec);
+  color: var(--fg, #1c1a14);
 }
 
 .nav-list {
@@ -602,6 +690,28 @@ const isFilterActiveForIds = (ids: string[]): boolean => {
   display: flex;
   flex-direction: column;
   gap: 1px;
+}
+
+.nav-empty {
+  margin: 0;
+  padding: 10px 8px;
+  font-size: 12.5px;
+  color: var(--fg-faint, #a8a294);
+  line-height: 1.5;
+}
+.nav-empty-link {
+  font: inherit;
+  font-size: inherit;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--fg-mid, #4a463c);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.nav-empty-link:hover {
+  color: var(--fg, #1c1a14);
 }
 
 .nav-li {
