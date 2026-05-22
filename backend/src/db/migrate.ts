@@ -1,13 +1,34 @@
 import type { Database as DatabaseType } from 'better-sqlite3'
+import bcrypt from 'bcryptjs'
+import { nanoid } from 'nanoid'
 import db from './connection.js'
 
 const BASE_SCHEMA = `
+CREATE TABLE IF NOT EXISTS users (
+  id            TEXT PRIMARY KEY,
+  username      TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  is_admin      INTEGER NOT NULL DEFAULT 0,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  token       TEXT PRIMARY KEY,
+  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_user    ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
+
 CREATE TABLE IF NOT EXISTS categories (
   id            TEXT PRIMARY KEY,
   name          TEXT NOT NULL,
   "order"       INTEGER NOT NULL DEFAULT 0,
   padre_id      TEXT REFERENCES categories(id) ON DELETE SET NULL,
   color         TEXT,
+  user_id       TEXT REFERENCES users(id) ON DELETE CASCADE,
   created_at    TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -30,6 +51,7 @@ CREATE TABLE IF NOT EXISTS bookmarks (
   image_bg_color        TEXT,
   image_bg_color2       TEXT,
   resboard              TEXT,
+  user_id               TEXT REFERENCES users(id) ON DELETE CASCADE,
   created_at            TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -179,6 +201,41 @@ const MIGRATIONS: Migration[] = [
         );
         CREATE INDEX IF NOT EXISTS idx_widgets_bookmark ON widgets(bookmark_id, "order");
       `)
+    }
+  },
+  {
+    version: 6,
+    up: (database) => {
+      if (!hasColumn(database, 'categories', 'user_id')) {
+        database.exec(`ALTER TABLE categories ADD COLUMN user_id TEXT REFERENCES users(id) ON DELETE CASCADE`)
+      }
+      if (!hasColumn(database, 'bookmarks', 'user_id')) {
+        database.exec(`ALTER TABLE bookmarks ADD COLUMN user_id TEXT REFERENCES users(id) ON DELETE CASCADE`)
+      }
+      database.exec(`CREATE INDEX IF NOT EXISTS idx_categories_user ON categories(user_id)`)
+      database.exec(`CREATE INDEX IF NOT EXISTS idx_bookmarks_user  ON bookmarks(user_id)`)
+
+      const userCount = (database.prepare(`SELECT COUNT(*) AS n FROM users`).get() as { n: number }).n
+
+      if (userCount === 0) {
+        const adminId = nanoid()
+        const rawPassword = process.env.ADMIN_PASSWORD ?? 'admin'
+        const hash = bcrypt.hashSync(rawPassword, 10)
+
+        database.prepare(`
+          INSERT INTO users (id, username, password_hash, is_admin)
+          VALUES (?, 'admin', ?, 1)
+        `).run(adminId, hash)
+
+        database.prepare(`UPDATE categories SET user_id = ? WHERE user_id IS NULL`).run(adminId)
+        database.prepare(`UPDATE bookmarks  SET user_id = ? WHERE user_id IS NULL`).run(adminId)
+
+        if (!process.env.ADMIN_PASSWORD) {
+          console.warn(`[migrate] usuario admin creado con password por defecto "admin". Defínelo en ADMIN_PASSWORD y cámbialo desde la UI.`)
+        } else {
+          console.log(`[migrate] usuario admin creado con la contraseña de ADMIN_PASSWORD.`)
+        }
+      }
     }
   }
 ]

@@ -41,3 +41,24 @@ export interface ApiResponse<T> {
   data: T
   error?: string
 }
+
+export interface User {
+  id: string
+  username: string
+  isAdmin: boolean
+  createdAt: string
+}
+
+export interface AuthUser {
+  id: string
+  username: string
+  isAdmin: boolean
+}
+
+declare global {
+  namespace Express {
+    interface Request {
+      user?: AuthUser
+    }
+  }
+}

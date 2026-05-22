@@ -2,8 +2,70 @@ import axios from 'axios'
 import type { Bookmark, Category, ApiResponse } from '@/types'
 
 const api = axios.create({
-  baseURL: '/api'
+  baseURL: '/api',
+  withCredentials: true
 })
+
+export { api }
+
+const unwrap = <T>(response: { data: ApiResponse<T> }): T => {
+  if (!response.data.success) {
+    throw new Error(response.data.error || 'API error')
+  }
+  return response.data.data
+}
+
+export interface AuthUser {
+  id: string
+  username: string
+  isAdmin: boolean
+}
+
+export interface ManagedUser {
+  id: string
+  username: string
+  isAdmin: boolean
+  createdAt: string
+}
+
+export const login = async (username: string, password: string): Promise<AuthUser> => {
+  const response = await api.post<ApiResponse<AuthUser>>('/auth/login', { username, password })
+  return unwrap(response)
+}
+
+export const logout = async (): Promise<void> => {
+  await api.post<ApiResponse<{ ok: true }>>('/auth/logout', {})
+}
+
+export const fetchMe = async (): Promise<AuthUser | null> => {
+  try {
+    const response = await api.get<ApiResponse<AuthUser>>('/auth/me')
+    return unwrap(response)
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.status === 401) return null
+    throw err
+  }
+}
+
+export const fetchUsers = async (): Promise<ManagedUser[]> => {
+  const response = await api.get<ApiResponse<ManagedUser[]>>('/users')
+  return unwrap(response)
+}
+
+export const createUserApi = async (input: { username: string; password: string; isAdmin?: boolean }): Promise<ManagedUser> => {
+  const response = await api.post<ApiResponse<ManagedUser>>('/users', input)
+  return unwrap(response)
+}
+
+export const updateUserApi = async (id: string, input: { password?: string; isAdmin?: boolean }): Promise<ManagedUser> => {
+  const response = await api.put<ApiResponse<ManagedUser>>(`/users/${id}`, input)
+  return unwrap(response)
+}
+
+export const deleteUserApi = async (id: string): Promise<void> => {
+  const response = await api.delete<ApiResponse<{ id: string }>>(`/users/${id}`)
+  unwrap(response)
+}
 
 export interface BookmarkInput {
   name: string
@@ -35,13 +97,6 @@ export interface CategoryReorderEntry {
   id: string
   order: number
   padreId: string | null
-}
-
-const unwrap = <T>(response: { data: ApiResponse<T> }): T => {
-  if (!response.data.success) {
-    throw new Error(response.data.error || 'API error')
-  }
-  return response.data.data
 }
 
 export const fetchBookmarks = async (): Promise<Bookmark[]> => {

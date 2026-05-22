@@ -2,8 +2,10 @@
 import { computed, provide, ref, watch } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import Sidebar from '@/components/Sidebar.vue'
+import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
+const auth = useAuthStore()
 const isSidebarOpen = ref(false)
 
 const toggleSidebar = () => {
@@ -17,6 +19,7 @@ const closeSidebar = () => {
 provide('toggleSidebar', toggleSidebar)
 
 const isHome = computed(() => route.name === 'home')
+const showShell = computed(() => auth.isAuthenticated && route.name !== 'login')
 
 watch(() => route.fullPath, () => {
   isSidebarOpen.value = false
@@ -24,7 +27,8 @@ watch(() => route.fullPath, () => {
 </script>
 
 <template>
-  <div class="app-shell" :class="{ 'is-home': isHome }">
+  <RouterView v-if="!showShell" />
+  <div v-else class="app-shell" :class="{ 'is-home': isHome }">
     <button
       v-if="!isHome"
       type="button"

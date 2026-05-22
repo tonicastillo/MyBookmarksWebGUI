@@ -79,12 +79,14 @@ const rowToBookmark = (
   widgets: widgetsByBookmark.get(row.id) ?? []
 })
 
-const loadTagsByBookmark = (): Map<string, string[]> => {
+const loadTagsByBookmark = (userId: string): Map<string, string[]> => {
   const rows = db.prepare(`
     SELECT bt.bookmark_id AS bookmarkId, t.name AS tag
     FROM bookmark_tags bt
     JOIN tags t ON t.id = bt.tag_id
-  `).all() as Array<{ bookmarkId: string; tag: string }>
+    JOIN bookmarks b ON b.id = bt.bookmark_id
+    WHERE b.user_id = ?
+  `).all(userId) as Array<{ bookmarkId: string; tag: string }>
 
   const map = new Map<string, string[]>()
   for (const r of rows) {
@@ -95,19 +97,24 @@ const loadTagsByBookmark = (): Map<string, string[]> => {
   return map
 }
 
-export const getAllBookmarks = (): Bookmark[] => {
-  const rows = db.prepare(`SELECT * FROM bookmarks ORDER BY created_at`).all() as BookmarkRow[]
-  const tagsByBookmark = loadTagsByBookmark()
-  const widgetsByBookmark = getAllWidgetsByBookmark()
+export const getAllBookmarks = (userId: string): Bookmark[] => {
+  const rows = db.prepare(`SELECT * FROM bookmarks WHERE user_id = ? ORDER BY created_at`).all(userId) as BookmarkRow[]
+  const tagsByBookmark = loadTagsByBookmark(userId)
+  const widgetsByBookmark = getAllWidgetsByBookmark(userId)
   return rows.map((r) => rowToBookmark(r, tagsByBookmark, widgetsByBookmark))
 }
 
-export const getBookmarkById = (id: string): Bookmark | undefined => {
-  const row = db.prepare(`SELECT * FROM bookmarks WHERE id = ?`).get(id) as BookmarkRow | undefined
+export const getBookmarkById = (id: string, userId: string): Bookmark | undefined => {
+  const row = db.prepare(`SELECT * FROM bookmarks WHERE id = ? AND user_id = ?`).get(id, userId) as BookmarkRow | undefined
   if (!row) return undefined
-  const tagsByBookmark = loadTagsByBookmark()
+  const tagsByBookmark = loadTagsByBookmark(userId)
   const widgetsByBookmark = new Map<string, Widget[]>([[id, getWidgetsByBookmark(id)]])
   return rowToBookmark(row, tagsByBookmark, widgetsByBookmark)
+}
+
+export const bookmarkBelongsToUser = (id: string, userId: string): boolean => {
+  const row = db.prepare(`SELECT 1 AS ok FROM bookmarks WHERE id = ? AND user_id = ?`).get(id, userId) as { ok: number } | undefined
+  return !!row
 }
 
 export interface BookmarkInput {
@@ -149,19 +156,19 @@ const upsertTags = (bookmarkId: string, tags: string[]): void => {
   }
 }
 
-export const insertBookmark = (id: string, input: BookmarkInput): Bookmark => {
+export const insertBookmark = (id: string, input: BookmarkInput, userId: string): Bookmark => {
   const tx = db.transaction(() => {
     db.prepare(`
       INSERT INTO bookmarks (
         id, name, url, subtitle, category_id, parent_bookmark_id,
         visible_at_start, is_mega_card, color,
         search_placeholder, search_url_template, image_url,
-        image_scale, image_bg_color, image_bg_color2, resboard
+        image_scale, image_bg_color, image_bg_color2, resboard, user_id
       ) VALUES (
         @id, @name, @url, @subtitle, @categoryId, @parentBookmarkId,
         @visibleAtStart, @isMegaCard, @color,
         @searchPlaceholder, @searchUrlTemplate, @imageUrl,
-        @imageScale, @imageBgColor, @imageBgColor2, @resboard
+        @imageScale, @imageBgColor, @imageBgColor2, @resboard, @userId
       )
     `).run({
       id,
@@ -179,22 +186,23 @@ export const insertBookmark = (id: string, input: BookmarkInput): Bookmark => {
       imageScale: input.imageScale ?? null,
       imageBgColor: input.imageBgColor ?? null,
       imageBgColor2: input.imageBgColor2 ?? null,
-      resboard: serializeResboard(input.resboard)
+      resboard: serializeResboard(input.resboard),
+      userId
     })
 
     if (input.tags) upsertTags(id, input.tags)
   })
   tx()
 
-  return getBookmarkById(id)!
+  return getBookmarkById(id, userId)!
 }
 
-export const updateBookmark = (id: string, input: Partial<BookmarkInput>): Bookmark | undefined => {
-  const existing = db.prepare(`SELECT id FROM bookmarks WHERE id = ?`).get(id)
+export const updateBookmark = (id: string, input: Partial<BookmarkInput>, userId: string): Bookmark | undefined => {
+  const existing = db.prepare(`SELECT id FROM bookmarks WHERE id = ? AND user_id = ?`).get(id, userId)
   if (!existing) return undefined
 
   const fields: string[] = []
-  const params: Record<string, unknown> = { id }
+  const params: Record<string, unknown> = { id, userId }
 
   const setField = (col: string, key: string, value: unknown) => {
     fields.push(`${col} = @${key}`)
@@ -220,30 +228,43 @@ export const updateBookmark = (id: string, input: Partial<BookmarkInput>): Bookm
   const tx = db.transaction(() => {
     if (fields.length > 0) {
       fields.push(`updated_at = datetime('now')`)
-      db.prepare(`UPDATE bookmarks SET ${fields.join(', ')} WHERE id = @id`).run(params)
+      db.prepare(`UPDATE bookmarks SET ${fields.join(', ')} WHERE id = @id AND user_id = @userId`).run(params)
     }
     if (input.tags !== undefined) upsertTags(id, input.tags)
   })
   tx()
 
-  return getBookmarkById(id)
+  return getBookmarkById(id, userId)
 }
 
-export const deleteBookmark = (id: string): boolean => {
-  const result = db.prepare(`DELETE FROM bookmarks WHERE id = ?`).run(id)
+export const deleteBookmark = (id: string, userId: string): boolean => {
+  const result = db.prepare(`DELETE FROM bookmarks WHERE id = ? AND user_id = ?`).run(id, userId)
   return result.changes > 0
 }
 
-export const updateImageFilename = (id: string, filename: string | null): void => {
-  db.prepare(`UPDATE bookmarks SET image_filename = ?, updated_at = datetime('now') WHERE id = ?`).run(filename, id)
+export const updateImageFilename = (id: string, userId: string, filename: string | null): void => {
+  db.prepare(`UPDATE bookmarks SET image_filename = ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(filename, id, userId)
 }
 
-export const getImageFilename = (id: string): string | null => {
-  const row = db.prepare(`SELECT image_filename FROM bookmarks WHERE id = ?`).get(id) as { image_filename: string | null } | undefined
+export const getImageFilename = (id: string, userId: string): string | null => {
+  const row = db.prepare(`SELECT image_filename FROM bookmarks WHERE id = ? AND user_id = ?`).get(id, userId) as { image_filename: string | null } | undefined
   return row?.image_filename ?? null
 }
 
-export const getAllTags = (): string[] => {
-  const rows = db.prepare(`SELECT name FROM tags ORDER BY name`).all() as Array<{ name: string }>
+export const getImageFilenameAny = (id: string): { filename: string | null; userId: string | null } | null => {
+  const row = db.prepare(`SELECT image_filename, user_id FROM bookmarks WHERE id = ?`).get(id) as { image_filename: string | null; user_id: string | null } | undefined
+  if (!row) return null
+  return { filename: row.image_filename, userId: row.user_id }
+}
+
+export const getAllTags = (userId: string): string[] => {
+  const rows = db.prepare(`
+    SELECT DISTINCT t.name AS name
+    FROM tags t
+    JOIN bookmark_tags bt ON bt.tag_id = t.id
+    JOIN bookmarks b ON b.id = bt.bookmark_id
+    WHERE b.user_id = ?
+    ORDER BY t.name
+  `).all(userId) as Array<{ name: string }>
   return rows.map((r) => r.name)
 }

@@ -18,10 +18,10 @@ const rowToCategory = (row: CategoryRow, hijosByPadre: Map<string, string[]>): C
   hijoIds: hijosByPadre.get(row.id) ?? []
 })
 
-const loadHijosByPadre = (): Map<string, string[]> => {
+const loadHijosByPadre = (userId: string): Map<string, string[]> => {
   const rows = db.prepare(`
-    SELECT id, padre_id FROM categories WHERE padre_id IS NOT NULL
-  `).all() as Array<{ id: string; padre_id: string }>
+    SELECT id, padre_id FROM categories WHERE padre_id IS NOT NULL AND user_id = ?
+  `).all(userId) as Array<{ id: string; padre_id: string }>
 
   const map = new Map<string, string[]>()
   for (const r of rows) {
@@ -32,16 +32,25 @@ const loadHijosByPadre = (): Map<string, string[]> => {
   return map
 }
 
-export const getAllCategories = (): Category[] => {
-  const rows = db.prepare(`SELECT id, name, "order", padre_id, color FROM categories ORDER BY "order"`).all() as CategoryRow[]
-  const hijosByPadre = loadHijosByPadre()
+export const getAllCategories = (userId: string): Category[] => {
+  const rows = db.prepare(`
+    SELECT id, name, "order", padre_id, color
+    FROM categories
+    WHERE user_id = ?
+    ORDER BY "order"
+  `).all(userId) as CategoryRow[]
+  const hijosByPadre = loadHijosByPadre(userId)
   return rows.map((r) => rowToCategory(r, hijosByPadre))
 }
 
-export const getCategoryById = (id: string): Category | undefined => {
-  const row = db.prepare(`SELECT id, name, "order", padre_id, color FROM categories WHERE id = ?`).get(id) as CategoryRow | undefined
+export const getCategoryById = (id: string, userId: string): Category | undefined => {
+  const row = db.prepare(`
+    SELECT id, name, "order", padre_id, color
+    FROM categories
+    WHERE id = ? AND user_id = ?
+  `).get(id, userId) as CategoryRow | undefined
   if (!row) return undefined
-  return rowToCategory(row, loadHijosByPadre())
+  return rowToCategory(row, loadHijosByPadre(userId))
 }
 
 export interface CategoryInput {
@@ -51,26 +60,27 @@ export interface CategoryInput {
   color?: string | null
 }
 
-export const insertCategory = (id: string, input: CategoryInput): Category => {
+export const insertCategory = (id: string, input: CategoryInput, userId: string): Category => {
   db.prepare(`
-    INSERT INTO categories (id, name, "order", padre_id, color)
-    VALUES (@id, @name, @order, @padreId, @color)
+    INSERT INTO categories (id, name, "order", padre_id, color, user_id)
+    VALUES (@id, @name, @order, @padreId, @color, @userId)
   `).run({
     id,
     name: input.name,
     order: input.order ?? 0,
     padreId: input.padreId ?? null,
-    color: input.color ?? null
+    color: input.color ?? null,
+    userId
   })
-  return getCategoryById(id)!
+  return getCategoryById(id, userId)!
 }
 
-export const updateCategory = (id: string, input: Partial<CategoryInput>): Category | undefined => {
-  const existing = db.prepare(`SELECT id FROM categories WHERE id = ?`).get(id)
+export const updateCategory = (id: string, input: Partial<CategoryInput>, userId: string): Category | undefined => {
+  const existing = db.prepare(`SELECT id FROM categories WHERE id = ? AND user_id = ?`).get(id, userId)
   if (!existing) return undefined
 
   const fields: string[] = []
-  const params: Record<string, unknown> = { id }
+  const params: Record<string, unknown> = { id, userId }
 
   if (input.name !== undefined) {
     fields.push(`name = @name`)
@@ -91,14 +101,14 @@ export const updateCategory = (id: string, input: Partial<CategoryInput>): Categ
 
   if (fields.length > 0) {
     fields.push(`updated_at = datetime('now')`)
-    db.prepare(`UPDATE categories SET ${fields.join(', ')} WHERE id = @id`).run(params)
+    db.prepare(`UPDATE categories SET ${fields.join(', ')} WHERE id = @id AND user_id = @userId`).run(params)
   }
 
-  return getCategoryById(id)
+  return getCategoryById(id, userId)
 }
 
-export const deleteCategory = (id: string): boolean => {
-  const result = db.prepare(`DELETE FROM categories WHERE id = ?`).run(id)
+export const deleteCategory = (id: string, userId: string): boolean => {
+  const result = db.prepare(`DELETE FROM categories WHERE id = ? AND user_id = ?`).run(id, userId)
   return result.changes > 0
 }
 
@@ -108,8 +118,8 @@ export interface ReorderEntry {
   padreId: string | null
 }
 
-const validateNoCycles = (entries: ReorderEntry[]): void => {
-  const all = db.prepare(`SELECT id, padre_id FROM categories`).all() as Array<{ id: string; padre_id: string | null }>
+const validateNoCycles = (entries: ReorderEntry[], userId: string): void => {
+  const all = db.prepare(`SELECT id, padre_id FROM categories WHERE user_id = ?`).all(userId) as Array<{ id: string; padre_id: string | null }>
   const padre = new Map<string, string | null>(all.map((r) => [r.id, r.padre_id]))
   for (const e of entries) padre.set(e.id, e.padreId)
 
@@ -125,17 +135,17 @@ const validateNoCycles = (entries: ReorderEntry[]): void => {
   }
 }
 
-export const reorderCategories = (entries: ReorderEntry[]): Category[] => {
-  validateNoCycles(entries)
+export const reorderCategories = (entries: ReorderEntry[], userId: string): Category[] => {
+  validateNoCycles(entries, userId)
 
   const stmt = db.prepare(`
     UPDATE categories
     SET "order" = @order, padre_id = @padreId, updated_at = datetime('now')
-    WHERE id = @id
+    WHERE id = @id AND user_id = @userId
   `)
   const tx = db.transaction((items: ReorderEntry[]) => {
-    for (const it of items) stmt.run(it)
+    for (const it of items) stmt.run({ ...it, userId })
   })
   tx(entries)
-  return getAllCategories()
+  return getAllCategories(userId)
 }

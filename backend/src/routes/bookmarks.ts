@@ -1,4 +1,4 @@
-import { Router, type Router as IRouter } from 'express'
+import { Router, type Router as IRouter, type Response } from 'express'
 import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
@@ -37,7 +37,7 @@ const ALLOWED_MIME: Record<string, string> = {
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/
 const CSS_COLOR_RE = /^(#[0-9a-fA-F]{3,8}|rgb\([^)]+\)|rgba\([^)]+\)|hsl\([^)]+\)|hsla\([^)]+\))$/
 
-const sendError = (res: Parameters<Parameters<typeof router.get>[1]>[1], status: number, message: string) => {
+const sendError = (res: Response, status: number, message: string) => {
   const response: ApiResponse<null> = { success: false, data: null, error: message }
   res.status(status).json(response)
 }
@@ -93,9 +93,9 @@ const sanitizeBookmarkInput = (input: BookmarkInput): BookmarkInput => {
   return patch
 }
 
-router.get('/', (_req, res) => {
+router.get('/', (req, res) => {
   try {
-    const bookmarks = getAllBookmarks()
+    const bookmarks = getAllBookmarks(req.user!.id)
     const response: ApiResponse<Bookmark[]> = { success: true, data: bookmarks }
     res.json(response)
   } catch (err) {
@@ -104,9 +104,9 @@ router.get('/', (_req, res) => {
   }
 })
 
-router.get('/tags', (_req, res) => {
+router.get('/tags', (req, res) => {
   try {
-    const response: ApiResponse<string[]> = { success: true, data: getAllTags() }
+    const response: ApiResponse<string[]> = { success: true, data: getAllTags(req.user!.id) }
     res.json(response)
   } catch (err) {
     console.error(err)
@@ -115,7 +115,7 @@ router.get('/tags', (_req, res) => {
 })
 
 router.get('/:id', (req, res) => {
-  const bookmark = getBookmarkById(req.params.id)
+  const bookmark = getBookmarkById(req.params.id, req.user!.id)
   if (!bookmark) return sendError(res, 404, 'Bookmark no encontrado')
   const response: ApiResponse<Bookmark> = { success: true, data: bookmark }
   res.json(response)
@@ -129,7 +129,7 @@ router.post('/', (req, res) => {
     }
     const sanitized = sanitizeBookmarkInput(input)
     const id = nanoid()
-    const bookmark = insertBookmark(id, sanitized)
+    const bookmark = insertBookmark(id, sanitized, req.user!.id)
     const response: ApiResponse<Bookmark> = { success: true, data: bookmark }
     res.status(201).json(response)
   } catch (err) {
@@ -141,7 +141,7 @@ router.post('/', (req, res) => {
 router.put('/:id', (req, res) => {
   try {
     const sanitized = sanitizeBookmarkInput(req.body as BookmarkInput)
-    const bookmark = updateBookmark(req.params.id, sanitized)
+    const bookmark = updateBookmark(req.params.id, sanitized, req.user!.id)
     if (!bookmark) return sendError(res, 404, 'Bookmark no encontrado')
     const response: ApiResponse<Bookmark> = { success: true, data: bookmark }
     res.json(response)
@@ -153,8 +153,9 @@ router.put('/:id', (req, res) => {
 
 router.delete('/:id', (req, res) => {
   try {
-    const filename = getImageFilename(req.params.id)
-    const ok = deleteBookmark(req.params.id)
+    const userId = req.user!.id
+    const filename = getImageFilename(req.params.id, userId)
+    const ok = deleteBookmark(req.params.id, userId)
     if (!ok) return sendError(res, 404, 'Bookmark no encontrado')
     if (filename) {
       const filepath = path.join(IMAGES_DIR, filename)
@@ -175,10 +176,11 @@ router.post('/:id/image', upload.single('image'), (req, res) => {
     const ext = ALLOWED_MIME[req.file.mimetype]
     if (!ext) return sendError(res, 400, `Mime no soportado: ${req.file.mimetype}`)
 
-    const bookmark = getBookmarkById(req.params.id)
+    const userId = req.user!.id
+    const bookmark = getBookmarkById(req.params.id, userId)
     if (!bookmark) return sendError(res, 404, 'Bookmark no encontrado')
 
-    const previous = getImageFilename(req.params.id)
+    const previous = getImageFilename(req.params.id, userId)
     const filename = `${req.params.id}.${ext}`
     fs.writeFileSync(path.join(IMAGES_DIR, filename), req.file.buffer)
 
@@ -187,8 +189,8 @@ router.post('/:id/image', upload.single('image'), (req, res) => {
       if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath)
     }
 
-    updateImageFilename(req.params.id, filename)
-    const updated = getBookmarkById(req.params.id)!
+    updateImageFilename(req.params.id, userId, filename)
+    const updated = getBookmarkById(req.params.id, userId)!
     const response: ApiResponse<Bookmark> = { success: true, data: updated }
     res.json(response)
   } catch (err) {
@@ -199,13 +201,14 @@ router.post('/:id/image', upload.single('image'), (req, res) => {
 
 router.delete('/:id/image', (req, res) => {
   try {
-    const filename = getImageFilename(req.params.id)
+    const userId = req.user!.id
+    const filename = getImageFilename(req.params.id, userId)
     if (filename) {
       const filepath = path.join(IMAGES_DIR, filename)
       if (fs.existsSync(filepath)) fs.unlinkSync(filepath)
-      updateImageFilename(req.params.id, null)
+      updateImageFilename(req.params.id, userId, null)
     }
-    const updated = getBookmarkById(req.params.id)
+    const updated = getBookmarkById(req.params.id, userId)
     if (!updated) return sendError(res, 404, 'Bookmark no encontrado')
     const response: ApiResponse<Bookmark> = { success: true, data: updated }
     res.json(response)

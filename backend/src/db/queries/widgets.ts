@@ -48,12 +48,14 @@ export const getWidgetById = (id: string): Widget | undefined => {
   return row ? rowToWidget(row) : undefined
 }
 
-export const getAllWidgetsByBookmark = (): Map<string, Widget[]> => {
+export const getAllWidgetsByBookmark = (userId: string): Map<string, Widget[]> => {
   const rows = db.prepare(`
-    SELECT id, bookmark_id, type, "order", config
-    FROM widgets
-    ORDER BY bookmark_id, "order", created_at
-  `).all() as WidgetRow[]
+    SELECT w.id, w.bookmark_id, w.type, w."order", w.config
+    FROM widgets w
+    JOIN bookmarks b ON b.id = w.bookmark_id
+    WHERE b.user_id = ?
+    ORDER BY w.bookmark_id, w."order", w.created_at
+  `).all(userId) as WidgetRow[]
   const map = new Map<string, Widget[]>()
   for (const row of rows) {
     const list = map.get(row.bookmark_id) ?? []
@@ -61,6 +63,16 @@ export const getAllWidgetsByBookmark = (): Map<string, Widget[]> => {
     map.set(row.bookmark_id, list)
   }
   return map
+}
+
+export const getWidgetByIdForUser = (id: string, userId: string): Widget | undefined => {
+  const row = db.prepare(`
+    SELECT w.id, w.bookmark_id, w.type, w."order", w.config
+    FROM widgets w
+    JOIN bookmarks b ON b.id = w.bookmark_id
+    WHERE w.id = ? AND b.user_id = ?
+  `).get(id, userId) as WidgetRow | undefined
+  return row ? rowToWidget(row) : undefined
 }
 
 const nextOrderFor = (bookmarkId: string): number => {

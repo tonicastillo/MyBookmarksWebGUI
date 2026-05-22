@@ -1,7 +1,6 @@
-import { Router, type Router as IRouter } from 'express'
+import { Router, type Router as IRouter, type Response } from 'express'
 import {
-  getWidgetById,
-  getWidgetsByBookmark,
+  getWidgetByIdForUser,
   insertWidget,
   updateWidgetConfig,
   deleteWidget,
@@ -19,7 +18,7 @@ import type { ApiResponse, Bookmark, Widget } from '../types/index.js'
 
 const router: IRouter = Router()
 
-const sendError = (res: Parameters<Parameters<typeof router.get>[1]>[1], status: number, message: string) => {
+const sendError = (res: Response, status: number, message: string) => {
   const response: ApiResponse<null> = { success: false, data: null, error: message }
   res.status(status).json(response)
 }
@@ -46,13 +45,14 @@ router.post('/', (req, res) => {
     if (!KNOWN_TYPES.has(body.type)) {
       return sendError(res, 400, `Tipo de widget desconocido: ${body.type}`)
     }
-    const bookmark = getBookmarkById(body.bookmarkId)
+    const userId = req.user!.id
+    const bookmark = getBookmarkById(body.bookmarkId, userId)
     if (!bookmark) return sendError(res, 404, 'Bookmark no encontrado')
 
     const config = validateConfig(body.config)
     const input: WidgetInput = { bookmarkId: body.bookmarkId, type: body.type, config }
     insertWidget(input)
-    const updated = getBookmarkById(body.bookmarkId)!
+    const updated = getBookmarkById(body.bookmarkId, userId)!
     const response: ApiResponse<Bookmark> = { success: true, data: updated }
     res.status(201).json(response)
   } catch (err) {
@@ -65,10 +65,11 @@ router.put('/:id', (req, res) => {
   try {
     const body = req.body as { config?: unknown }
     const config = validateConfig(body?.config)
-    const widget = getWidgetById(req.params.id)
+    const userId = req.user!.id
+    const widget = getWidgetByIdForUser(req.params.id, userId)
     if (!widget) return sendError(res, 404, 'Widget no encontrado')
     updateWidgetConfig(req.params.id, config)
-    const updated = getBookmarkById(widget.bookmarkId)!
+    const updated = getBookmarkById(widget.bookmarkId, userId)!
     const response: ApiResponse<Bookmark> = { success: true, data: updated }
     res.json(response)
   } catch (err) {
@@ -79,10 +80,11 @@ router.put('/:id', (req, res) => {
 
 router.delete('/:id', (req, res) => {
   try {
-    const widget = getWidgetById(req.params.id)
+    const userId = req.user!.id
+    const widget = getWidgetByIdForUser(req.params.id, userId)
     if (!widget) return sendError(res, 404, 'Widget no encontrado')
     deleteWidget(req.params.id)
-    const updated = getBookmarkById(widget.bookmarkId)!
+    const updated = getBookmarkById(widget.bookmarkId, userId)!
     const response: ApiResponse<Bookmark> = { success: true, data: updated }
     res.json(response)
   } catch (err) {
@@ -100,9 +102,11 @@ router.post('/reorder', (req, res) => {
     if (!Array.isArray(body.ids) || !body.ids.every((id) => typeof id === 'string')) {
       return sendError(res, 400, 'ids debe ser array de strings')
     }
+    const userId = req.user!.id
+    const bookmark = getBookmarkById(body.bookmarkId, userId)
+    if (!bookmark) return sendError(res, 404, 'Bookmark no encontrado')
     reorderWidgets(body.bookmarkId, body.ids as string[])
-    const updated = getBookmarkById(body.bookmarkId)
-    if (!updated) return sendError(res, 404, 'Bookmark no encontrado')
+    const updated = getBookmarkById(body.bookmarkId, userId)!
     const response: ApiResponse<Bookmark> = { success: true, data: updated }
     res.json(response)
   } catch (err) {
@@ -111,8 +115,8 @@ router.post('/reorder', (req, res) => {
   }
 })
 
-const getUnraidWidgetOrFail = (id: string): { widget: Widget; config: UnraidWidgetConfig } | { error: string; status: number } => {
-  const widget = getWidgetById(id)
+const getUnraidWidgetOrFail = (id: string, userId: string): { widget: Widget; config: UnraidWidgetConfig } | { error: string; status: number } => {
+  const widget = getWidgetByIdForUser(id, userId)
   if (!widget) return { error: 'Widget no encontrado', status: 404 }
   if (widget.type !== 'unraid-docker') return { error: 'Widget no es de tipo unraid-docker', status: 400 }
   const cfg = widget.config as Partial<UnraidWidgetConfig>
@@ -123,7 +127,7 @@ const getUnraidWidgetOrFail = (id: string): { widget: Widget; config: UnraidWidg
 }
 
 router.get('/:id/unraid/status', async (req, res) => {
-  const lookup = getUnraidWidgetOrFail(req.params.id)
+  const lookup = getUnraidWidgetOrFail(req.params.id, req.user!.id)
   if ('error' in lookup) return sendError(res, lookup.status, lookup.error)
   try {
     const data = await fetchUnraidContainer(lookup.config)
@@ -136,7 +140,7 @@ router.get('/:id/unraid/status', async (req, res) => {
 })
 
 router.post('/:id/unraid/action', async (req, res) => {
-  const lookup = getUnraidWidgetOrFail(req.params.id)
+  const lookup = getUnraidWidgetOrFail(req.params.id, req.user!.id)
   if ('error' in lookup) return sendError(res, lookup.status, lookup.error)
   const action = (req.body as { action?: string })?.action
   const VALID: UnraidActionName[] = ['start', 'stop', 'restart']

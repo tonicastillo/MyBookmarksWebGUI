@@ -1,4 +1,4 @@
-import { Router, type Router as IRouter } from 'express'
+import { Router, type Router as IRouter, type Response } from 'express'
 import { nanoid } from 'nanoid'
 import {
   getAllCategories,
@@ -16,7 +16,7 @@ const router: IRouter = Router()
 
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/
 
-const sendError = (res: Parameters<Parameters<typeof router.get>[1]>[1], status: number, message: string) => {
+const sendError = (res: Response, status: number, message: string) => {
   const response: ApiResponse<null> = { success: false, data: null, error: message }
   res.status(status).json(response)
 }
@@ -28,9 +28,9 @@ const validateColor = (color: unknown): string | null | undefined => {
   throw new Error('color debe ser hex #rrggbb o null')
 }
 
-router.get('/', (_req, res) => {
+router.get('/', (req, res) => {
   try {
-    const categories = getAllCategories()
+    const categories = getAllCategories(req.user!.id)
     const response: ApiResponse<Category[]> = { success: true, data: categories }
     res.json(response)
   } catch (err) {
@@ -48,7 +48,7 @@ router.put('/reorder', (req, res) => {
       order: Number(item.order),
       padreId: item.padreId ?? null
     }))
-    const updated = reorderCategories(entries)
+    const updated = reorderCategories(entries, req.user!.id)
     const response: ApiResponse<Category[]> = { success: true, data: updated }
     res.json(response)
   } catch (err) {
@@ -60,7 +60,7 @@ router.put('/reorder', (req, res) => {
 })
 
 router.get('/:id', (req, res) => {
-  const category = getCategoryById(req.params.id)
+  const category = getCategoryById(req.params.id, req.user!.id)
   if (!category) return sendError(res, 404, 'Categoría no encontrada')
   const response: ApiResponse<Category> = { success: true, data: category }
   res.json(response)
@@ -74,7 +74,7 @@ router.post('/', (req, res) => {
     }
     const color = validateColor(input.color)
     const id = nanoid()
-    const category = insertCategory(id, { ...input, color })
+    const category = insertCategory(id, { ...input, color }, req.user!.id)
     const response: ApiResponse<Category> = { success: true, data: category }
     res.status(201).json(response)
   } catch (err) {
@@ -89,7 +89,7 @@ router.put('/:id', (req, res) => {
     const color = validateColor(input.color)
     const patch: Partial<CategoryInput> = { ...input }
     if (color !== undefined) patch.color = color
-    const category = updateCategory(req.params.id, patch)
+    const category = updateCategory(req.params.id, patch, req.user!.id)
     if (!category) return sendError(res, 404, 'Categoría no encontrada')
     const response: ApiResponse<Category> = { success: true, data: category }
     res.json(response)
@@ -101,7 +101,7 @@ router.put('/:id', (req, res) => {
 
 router.delete('/:id', (req, res) => {
   try {
-    const ok = deleteCategory(req.params.id)
+    const ok = deleteCategory(req.params.id, req.user!.id)
     if (!ok) return sendError(res, 404, 'Categoría no encontrada')
     const response: ApiResponse<{ id: string }> = { success: true, data: { id: req.params.id } }
     res.json(response)

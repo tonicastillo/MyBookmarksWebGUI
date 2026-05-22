@@ -6,12 +6,19 @@ import { useBookmarksStore } from "@/stores/bookmarks";
 import { useCategoriesStore } from "@/stores/categories";
 import { hueFromHex } from "@/composables/useColorHue";
 import { useCategoryFilter } from "@/composables/useCategoryFilter";
+import { useAuthStore } from "@/stores/auth";
 
 const router = useRouter();
 const { getCategoriesWithVisibleGroups } = useBookmarks();
 const bookmarksStore = useBookmarksStore();
 const categoriesStore = useCategoriesStore();
 const { categoryFilter, setFilter } = useCategoryFilter();
+const auth = useAuthStore();
+
+const onLogout = async () => {
+  await auth.logout();
+  router.push({ name: "login" });
+};
 
 defineProps<{
   open?: boolean;
@@ -309,6 +316,26 @@ const isFilterActiveForIds = (ids: string[]): boolean => {
       </button>
     </div>
 
+    <div v-if="auth.currentUser" class="session">
+      <div class="session-info">
+        <span class="session-user">{{ auth.currentUser.username }}</span>
+        <span v-if="auth.currentUser.isAdmin" class="session-badge">admin</span>
+      </div>
+      <div class="session-actions">
+        <button
+          v-if="auth.isAdmin"
+          type="button"
+          class="session-btn"
+          @click="goTo('/admin/users')"
+        >
+          Usuarios
+        </button>
+        <button type="button" class="session-btn" @click="onLogout">
+          Salir
+        </button>
+      </div>
+    </div>
+
     <nav v-if="items.length > 0" class="nav">
       <div class="nav-label">CATEGORIES</div>
       <ul class="nav-list">
@@ -469,6 +496,58 @@ const isFilterActiveForIds = (ids: string[]): boolean => {
   font-size: 15.5px;
   font-weight: 700;
   letter-spacing: -0.015em;
+  color: var(--fg, #1c1a14);
+}
+
+.session {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 6px 14px;
+  padding: 10px 10px;
+  border-radius: 8px;
+  background: var(--bg-soft, #f3f1ec);
+}
+.session-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.session-user {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg, #1c1a14);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(28, 26, 20, 0.1);
+  color: var(--fg-mid, #4a463c);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.session-actions {
+  display: flex;
+  gap: 6px;
+}
+.session-btn {
+  font: inherit;
+  font-size: 11.5px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 0.5px solid var(--border, rgba(28, 26, 20, 0.12));
+  background: var(--bg, #faf9f7);
+  color: var(--fg-mid, #4a463c);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.session-btn:hover {
+  background: var(--bg-elev, #ffffff);
   color: var(--fg, #1c1a14);
 }
 
