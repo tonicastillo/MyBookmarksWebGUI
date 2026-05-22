@@ -10,6 +10,9 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@tiptap/extension-link": "^3.23.6",
+    "@tiptap/starter-kit": "^3.23.6",
+    "@tiptap/vue-3": "^3.23.6",
     "axios": "^1.7.9",
     "pinia": "^2.3.0",
     "sortablejs": "^1.15.7",

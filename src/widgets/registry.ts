@@ -3,6 +3,8 @@ import HelloWorldConfig from './hello-world/HelloWorldConfig.vue'
 import HelloWorldRender from './hello-world/HelloWorldRender.vue'
 import UnraidDockerConfig from './unraid-docker/UnraidDockerConfig.vue'
 import UnraidDockerRender from './unraid-docker/UnraidDockerRender.vue'
+import NotesConfig from './notes/NotesConfig.vue'
+import NotesRender from './notes/NotesRender.vue'
 
 export interface WidgetTypeDef {
   type: string
@@ -34,6 +36,14 @@ export const WIDGET_TYPES: WidgetTypeDef[] = [
     },
     ConfigComponent: UnraidDockerConfig,
     RenderComponent: UnraidDockerRender
+  },
+  {
+    type: 'notes',
+    displayName: 'Notas',
+    description: 'Notas con texto enriquecido (negrita, itálica, enlaces, listas).',
+    defaultConfig: { notes: [] },
+    ConfigComponent: NotesConfig,
+    RenderComponent: NotesRender
   }
 ]
 
