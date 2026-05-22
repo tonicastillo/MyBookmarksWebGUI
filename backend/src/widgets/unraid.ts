@@ -242,15 +242,16 @@ const fetchContainerStats = (config: UnraidWidgetConfig, containerId: string): P
   })
 }
 
-const ACTION_MUTATIONS: Record<UnraidActionName, string> = {
+const ACTION_MUTATIONS: Record<'start' | 'stop', string> = {
   start: `mutation Start($id: PrefixedID!) { docker { start(id: $id) { id state status } } }`,
-  stop: `mutation Stop($id: PrefixedID!) { docker { stop(id: $id) { id state status } } }`,
-  restart: `mutation Restart($id: PrefixedID!) { docker { restart(id: $id) { id state status } } }`
+  stop: `mutation Stop($id: PrefixedID!) { docker { stop(id: $id) { id state status } } }`
 }
 
 interface ActionResult {
   docker: Record<string, { id?: string; state?: string; status?: string } | null>
 }
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
 export const runUnraidAction = async (
   config: UnraidWidgetConfig,
@@ -259,8 +260,14 @@ export const runUnraidAction = async (
   const info = await fetchUnraidContainer(config)
   if (!info.id) throw new Error(`No se puede ejecutar "${action}": contenedor no encontrado`)
 
-  const mutation = ACTION_MUTATIONS[action]
-  await callGraphQL<ActionResult>(config, mutation, { id: info.id })
+  if (action === 'restart') {
+    // Unraid GraphQL no expone "restart" en DockerMutations: lo emulamos.
+    await callGraphQL<ActionResult>(config, ACTION_MUTATIONS.stop, { id: info.id })
+    await sleep(1500)
+    await callGraphQL<ActionResult>(config, ACTION_MUTATIONS.start, { id: info.id })
+  } else {
+    await callGraphQL<ActionResult>(config, ACTION_MUTATIONS[action], { id: info.id })
+  }
 
   return fetchUnraidContainer(config)
 }
