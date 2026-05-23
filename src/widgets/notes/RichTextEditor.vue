@@ -40,7 +40,7 @@ watch(
     const incoming = next || ''
     const normCurrent = current === '<p></p>' ? '' : current
     if (incoming !== normCurrent) {
-      editor.value?.commands.setContent(incoming || '', false)
+      editor.value?.commands.setContent(incoming || '', { emitUpdate: false })
     }
   }
 )
