@@ -2,6 +2,7 @@
 import { computed, provide, ref, watch } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import Sidebar from '@/components/Sidebar.vue'
+import BookmarkEditDrawer from '@/components/BookmarkEditDrawer.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
@@ -67,6 +68,8 @@ watch(() => route.fullPath, () => {
         <RouterView />
       </div>
     </main>
+
+    <BookmarkEditDrawer />
   </div>
 </template>
 

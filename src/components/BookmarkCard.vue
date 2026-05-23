@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { Bookmark } from '@/types'
 import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { resolveBookmarkHue } from '@/composables/useColorHue'
 import { useCategoriesStore } from '@/stores/categories'
+import { useEditDrawerStore } from '@/stores/editDrawer'
 import { buildImageStyle } from '@/composables/useImageStyle'
 import { useAltKey } from '@/composables/useAltKey'
 import {
@@ -12,8 +12,8 @@ import {
 } from '@/composables/useBookmarkDuplicate'
 import WidgetRenderer from './widgets/WidgetRenderer.vue'
 
-const router = useRouter()
 const categoriesStore = useCategoriesStore()
+const editDrawer = useEditDrawerStore()
 const { isAltPressed } = useAltKey()
 const { setPendingDuplicate } = useBookmarkDuplicate()
 
@@ -64,16 +64,21 @@ const handleTagClick = (tag: string, event: Event) => {
   emit('tag-click', tag)
 }
 
+const editHref = computed(() => `/edit/${props.bookmark.id}`)
+
 const handleEditClick = async (event: MouseEvent) => {
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) {
+    return
+  }
   event.preventDefault()
   event.stopPropagation()
   if (event.altKey) {
     const payload = await buildDuplicatePayload(props.bookmark)
     setPendingDuplicate(payload)
-    router.push('/edit')
+    editDrawer.open()
     return
   }
-  router.push(`/edit/${props.bookmark.id}`)
+  editDrawer.open({ bookmarkId: props.bookmark.id })
 }
 
 const searchQuery = ref('')
@@ -87,25 +92,28 @@ const handleSearchSubmit = (event: Event) => {
   window.open(url, '_blank', 'noopener,noreferrer')
 }
 
-const stopAnchorNav = (event: Event) => {
+const stop = (event: Event) => {
   event.stopPropagation()
 }
-
-const cardTag = computed(() => (hasUrl.value ? 'a' : 'div'))
 
 const imageStyle = computed(() => buildImageStyle(props.bookmark))
 </script>
 
 <template>
-  <component
-    :is="cardTag"
+  <div
     class="card"
-    :class="{ 'no-color': hue === null }"
-    :href="hasUrl ? bookmark.url : undefined"
-    :target="hasUrl ? '_blank' : undefined"
-    :rel="hasUrl ? 'noopener noreferrer' : undefined"
+    :class="{ 'no-color': hue === null, 'has-link': hasUrl }"
     :style="hue !== null ? { '--c': hue } : {}"
   >
+    <a
+      v-if="hasUrl"
+      class="card-link"
+      :href="bookmark.url"
+      target="_blank"
+      rel="noopener noreferrer"
+      :aria-label="bookmark.name"
+    ></a>
+
     <div class="card-thumb" :style="imageStyle.thumb">
       <img
         v-if="bookmark.imageUrl"
@@ -139,7 +147,7 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
         v-if="hasSearch"
         class="card-search"
         @submit="handleSearchSubmit"
-        @click="stopAnchorNav"
+        @click="stop"
       >
         <input
           v-model="searchQuery"
@@ -168,15 +176,16 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
         v-if="bookmark.widgets && bookmark.widgets.length > 0"
         :widgets="bookmark.widgets"
         class="card-widgets"
-        @click="stopAnchorNav"
+        @click="stop"
       />
     </div>
 
-    <button
+    <a
       class="card-edit"
       :class="{ 'is-duplicate': isAltPressed }"
+      :href="editHref"
       :aria-label="isAltPressed ? 'Duplicar' : 'Editar'"
-      :title="isAltPressed ? 'Duplicar bookmark' : 'Editar (Alt para duplicar)'"
+      :title="isAltPressed ? 'Duplicar bookmark' : 'Editar (Alt para duplicar, Cmd+Click para nueva pestaña)'"
       @click="handleEditClick"
     >
       <svg
@@ -209,8 +218,8 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
         <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
       </svg>
-    </button>
-  </component>
+    </a>
+  </div>
 </template>
 
 <style scoped>
@@ -227,10 +236,10 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
   transition: box-shadow 160ms ease, transform 160ms ease, border-color 160ms ease;
   position: relative;
   overflow: hidden;
-  text-decoration: none;
   color: inherit;
   min-height: 78px;
 }
+.card.has-link { cursor: pointer; }
 .card::before {
   content: '';
   position: absolute;
@@ -262,6 +271,14 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
 .card.no-color::after { display: none; }
 .card.no-color { padding-left: 12px; }
 
+.card-link {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  text-decoration: none;
+}
+
 .card-thumb {
   width: 52px;
   height: 52px;
@@ -277,6 +294,7 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
   border: 0.5px solid var(--border, rgba(28, 26, 20, 0.08));
   position: relative;
   overflow: hidden;
+  pointer-events: none;
 }
 .card-thumb img {
   width: 100%;
@@ -293,7 +311,8 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
   flex-direction: column;
   gap: 2px;
   position: relative;
-  z-index: 1;
+  z-index: 2;
+  pointer-events: none;
 }
 .card-title {
   font-size: 13.5px;
@@ -319,6 +338,7 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
   gap: 4px;
   margin-top: 5px;
   flex-wrap: wrap;
+  pointer-events: auto;
 }
 .card-tag {
   font-size: 10px;
@@ -347,17 +367,18 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
   cursor: pointer;
   opacity: 0;
   transition: opacity 120ms ease, background 120ms ease;
-  z-index: 2;
+  z-index: 3;
+  text-decoration: none;
 }
 .card:hover .card-edit { opacity: 1; }
 .card-edit:hover { background: var(--bg-soft, #f3f1ec); color: var(--fg, #1c1a14); }
+.card-edit:focus-visible { opacity: 1; outline: 2px solid var(--fg, #1c1a14); outline-offset: 2px; }
 
 .card-search {
   display: flex;
   gap: 4px;
   margin-top: 7px;
-  position: relative;
-  z-index: 1;
+  pointer-events: auto;
 }
 .card-search input {
   flex: 1;
@@ -396,5 +417,6 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
 
 .card-widgets {
   margin-top: 7px;
+  pointer-events: auto;
 }
 </style>

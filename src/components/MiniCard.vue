@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { Bookmark } from '@/types'
 import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { resolveBookmarkHue } from '@/composables/useColorHue'
 import { useCategoriesStore } from '@/stores/categories'
+import { useEditDrawerStore } from '@/stores/editDrawer'
 import { buildImageStyle } from '@/composables/useImageStyle'
 import { useAltKey } from '@/composables/useAltKey'
 import {
@@ -12,8 +12,8 @@ import {
 } from '@/composables/useBookmarkDuplicate'
 import WidgetRenderer from './widgets/WidgetRenderer.vue'
 
-const router = useRouter()
 const categoriesStore = useCategoriesStore()
+const editDrawer = useEditDrawerStore()
 const { isAltPressed } = useAltKey()
 const { setPendingDuplicate } = useBookmarkDuplicate()
 
@@ -29,6 +29,8 @@ const hue = computed(() => {
 })
 const hasUrl = computed(() => Boolean(props.bookmark.url))
 const hasSearch = computed(() => Boolean(props.bookmark.searchUrlTemplate))
+const hasWidgets = computed(() => Boolean(props.bookmark.widgets && props.bookmark.widgets.length > 0))
+const isComplex = computed(() => hasSearch.value || hasWidgets.value)
 
 const initials = computed(() => {
   const trimmed = props.bookmark.name.trim()
@@ -48,16 +50,21 @@ const displaySub = computed(() => {
   }
 })
 
+const editHref = computed(() => `/edit/${props.bookmark.id}`)
+
 const handleEditClick = async (event: MouseEvent) => {
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) {
+    return
+  }
   event.preventDefault()
   event.stopPropagation()
   if (event.altKey) {
     const payload = await buildDuplicatePayload(props.bookmark)
     setPendingDuplicate(payload)
-    router.push('/edit')
+    editDrawer.open()
     return
   }
-  router.push(`/edit/${props.bookmark.id}`)
+  editDrawer.open({ bookmarkId: props.bookmark.id })
 }
 
 const searchQuery = ref('')
@@ -74,27 +81,25 @@ const stop = (event: Event) => {
   event.stopPropagation()
 }
 
-const hasWidgets = computed(() => Boolean(props.bookmark.widgets && props.bookmark.widgets.length > 0))
-
-const rowTag = computed(() => (hasUrl.value ? 'a' : 'div'))
-
 const imageStyle = computed(() => buildImageStyle(props.bookmark))
 </script>
 
 <template>
   <div
-    v-if="hasSearch || hasWidgets"
+    v-if="isComplex"
     class="minicard has-search"
     :class="{ 'no-color': hue === null }"
     :style="hue !== null ? { '--c': hue } : {}"
   >
-    <component
-      :is="rowTag"
-      :href="hasUrl ? bookmark.url : undefined"
-      :target="hasUrl ? '_blank' : undefined"
-      :rel="hasUrl ? 'noopener noreferrer' : undefined"
-      class="minicard-row"
-    >
+    <div class="minicard-row" :class="{ 'has-link': hasUrl }">
+      <a
+        v-if="hasUrl"
+        class="minicard-link"
+        :href="bookmark.url"
+        target="_blank"
+        rel="noopener noreferrer"
+        :aria-label="bookmark.name"
+      ></a>
       <div class="minicard-thumb" :style="imageStyle.thumb">
         <img v-if="bookmark.imageUrl" :src="bookmark.imageUrl" :alt="bookmark.name" loading="lazy" :style="imageStyle.img" />
         <span v-else>{{ initials }}</span>
@@ -103,11 +108,12 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
         <div class="minicard-title">{{ bookmark.name }}</div>
         <div v-if="displaySub" class="minicard-sub">{{ displaySub }}</div>
       </div>
-      <button
+      <a
         class="minicard-edit"
         :class="{ 'is-duplicate': isAltPressed }"
+        :href="editHref"
         :aria-label="isAltPressed ? 'Duplicar' : 'Editar'"
-        :title="isAltPressed ? 'Duplicar bookmark' : 'Editar (Alt para duplicar)'"
+        :title="isAltPressed ? 'Duplicar bookmark' : 'Editar (Alt para duplicar, Cmd+Click para nueva pestaña)'"
         @click="handleEditClick"
       >
         <svg v-if="!isAltPressed" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -118,8 +124,8 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
           <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
           <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
         </svg>
-      </button>
-    </component>
+      </a>
+    </div>
     <form v-if="hasSearch" class="card-search" @submit="handleSearchSubmit" @click="stop">
       <input
         v-model="searchQuery"
@@ -141,16 +147,20 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
     />
   </div>
 
-  <component
+  <div
     v-else
-    :is="rowTag"
-    :href="hasUrl ? bookmark.url : undefined"
-    :target="hasUrl ? '_blank' : undefined"
-    :rel="hasUrl ? 'noopener noreferrer' : undefined"
     class="minicard"
-    :class="{ 'no-color': hue === null }"
+    :class="{ 'no-color': hue === null, 'has-link': hasUrl }"
     :style="hue !== null ? { '--c': hue } : {}"
   >
+    <a
+      v-if="hasUrl"
+      class="minicard-link"
+      :href="bookmark.url"
+      target="_blank"
+      rel="noopener noreferrer"
+      :aria-label="bookmark.name"
+    ></a>
     <div class="minicard-thumb" :style="imageStyle.thumb">
       <img v-if="bookmark.imageUrl" :src="bookmark.imageUrl" :alt="bookmark.name" loading="lazy" :style="imageStyle.img" />
       <span v-else>{{ initials }}</span>
@@ -159,11 +169,12 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
       <div class="minicard-title">{{ bookmark.name }}</div>
       <div v-if="displaySub" class="minicard-sub">{{ displaySub }}</div>
     </div>
-    <button
+    <a
       class="minicard-edit"
       :class="{ 'is-duplicate': isAltPressed }"
+      :href="editHref"
       :aria-label="isAltPressed ? 'Duplicar' : 'Editar'"
-      :title="isAltPressed ? 'Duplicar bookmark' : 'Editar (Alt para duplicar)'"
+      :title="isAltPressed ? 'Duplicar bookmark' : 'Editar (Alt para duplicar, Cmd+Click para nueva pestaña)'"
       @click="handleEditClick"
     >
       <svg v-if="!isAltPressed" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -174,8 +185,8 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
         <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
       </svg>
-    </button>
-  </component>
+    </a>
+  </div>
 </template>
 
 <style scoped>
@@ -186,7 +197,6 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
   gap: 9px;
   padding: 7px 8px 7px 11px;
   border-radius: 9px;
-  text-decoration: none;
   color: var(--fg, #1c1a14);
   cursor: default;
   position: relative;
@@ -195,6 +205,7 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
   overflow: hidden;
   background: transparent;
 }
+.minicard.has-link { cursor: pointer; }
 .minicard::before {
   content: '';
   position: absolute;
@@ -211,6 +222,14 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
 .minicard.no-color::before { display: none; }
 .minicard.no-color { padding-left: 8px; }
 
+.minicard-link {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  text-decoration: none;
+}
+
 .minicard-thumb {
   width: 28px;
   height: 28px;
@@ -224,9 +243,18 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
   background: var(--bg, #faf9f7);
   border: 0.5px solid var(--border, rgba(28, 26, 20, 0.08));
   overflow: hidden;
+  pointer-events: none;
+  position: relative;
+  z-index: 2;
 }
 .minicard-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.minicard-body { min-width: 0; flex: 1; }
+.minicard-body {
+  min-width: 0;
+  flex: 1;
+  position: relative;
+  z-index: 2;
+  pointer-events: none;
+}
 .minicard-title {
   font-size: 12px;
   font-weight: 500;
@@ -256,10 +284,14 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
   cursor: pointer;
   opacity: 0;
   flex-shrink: 0;
+  position: relative;
+  z-index: 3;
+  text-decoration: none;
 }
 .minicard:hover .minicard-edit,
 .minicard.has-search .minicard-row:hover .minicard-edit { opacity: 1; }
 .minicard-edit:hover { background: var(--bg-softer, #ecebe5); color: var(--fg, #1c1a14); }
+.minicard-edit:focus-visible { opacity: 1; outline: 2px solid var(--fg, #1c1a14); outline-offset: 2px; }
 
 .minicard.has-search {
   flex-direction: column;
@@ -267,21 +299,26 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
   gap: 5px;
   padding: 8px;
   background: transparent;
+  cursor: default;
 }
 .minicard.has-search .minicard-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  text-decoration: none;
   color: inherit;
   border-radius: 6px;
   padding: 2px;
+  position: relative;
+  cursor: default;
 }
+.minicard.has-search .minicard-row.has-link { cursor: pointer; }
 .minicard.has-search .minicard-row:hover { background: var(--bg-soft, #f3f1ec); }
 
 .card-search {
   display: flex;
   gap: 4px;
+  position: relative;
+  z-index: 2;
 }
 .card-search input {
   flex: 1;

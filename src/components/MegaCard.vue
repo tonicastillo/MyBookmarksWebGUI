@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { Bookmark } from '@/types'
 import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { resolveBookmarkHue } from '@/composables/useColorHue'
 import { useCategoriesStore } from '@/stores/categories'
+import { useEditDrawerStore } from '@/stores/editDrawer'
 import { buildImageStyle } from '@/composables/useImageStyle'
 import { useAltKey } from '@/composables/useAltKey'
 import {
@@ -13,8 +13,8 @@ import {
 import MiniCard from './MiniCard.vue'
 import WidgetRenderer from './widgets/WidgetRenderer.vue'
 
-const router = useRouter()
 const categoriesStore = useCategoriesStore()
+const editDrawer = useEditDrawerStore()
 const { isAltPressed } = useAltKey()
 const { setPendingDuplicate } = useBookmarkDuplicate()
 
@@ -64,27 +64,39 @@ const initials = computed(() => {
   return trimmed.slice(0, 2).toUpperCase()
 })
 
+const editHref = computed(() => `/edit/${props.parent.id}`)
+
+const addChildHref = computed(() => {
+  const params = new URLSearchParams()
+  if (props.parent.categoryId) params.set('categoryId', props.parent.categoryId)
+  params.set('parentBookmarkId', props.parent.id)
+  return `/edit?${params.toString()}`
+})
+
 const handleEditClick = async (event: MouseEvent) => {
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) {
+    return
+  }
   event.preventDefault()
   event.stopPropagation()
   if (event.altKey) {
     const payload = await buildDuplicatePayload(props.parent)
     setPendingDuplicate(payload)
-    router.push('/edit')
+    editDrawer.open()
     return
   }
-  router.push(`/edit/${props.parent.id}`)
+  editDrawer.open({ bookmarkId: props.parent.id })
 }
 
-const handleAddChildClick = (event: Event) => {
+const handleAddChildClick = (event: MouseEvent) => {
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) {
+    return
+  }
   event.preventDefault()
   event.stopPropagation()
-  router.push({
-    path: '/edit',
-    query: {
-      categoryId: props.parent.categoryId ?? '',
-      parentBookmarkId: props.parent.id,
-    },
+  editDrawer.open({
+    defaultCategoryId: props.parent.categoryId ?? undefined,
+    defaultParentBookmarkId: props.parent.id,
   })
 }
 
@@ -138,9 +150,10 @@ const handleTagClick = (tag: string) => {
         <div v-if="parent.subtitle" class="megacard-sub">{{ parent.subtitle }}</div>
       </div>
       <span class="megacard-badge">{{ children.length }} sites</span>
-      <button
+      <a
         class="card-edit mega-edit"
-        :title="`Nuevo bookmark en ${parent.name}`"
+        :href="addChildHref"
+        :title="`Nuevo bookmark en ${parent.name} (Cmd+Click para nueva pestaña)`"
         :aria-label="`Nuevo bookmark en ${parent.name}`"
         @click="handleAddChildClick"
       >
@@ -148,12 +161,13 @@ const handleTagClick = (tag: string) => {
           <line x1="12" y1="5" x2="12" y2="19" />
           <line x1="5" y1="12" x2="19" y2="12" />
         </svg>
-      </button>
-      <button
+      </a>
+      <a
         class="card-edit mega-edit"
         :class="{ 'is-duplicate': isAltPressed }"
+        :href="editHref"
         :aria-label="isAltPressed ? `Duplicar ${parent.name}` : 'Editar'"
-        :title="isAltPressed ? 'Duplicar mega card (sólo el padre)' : 'Editar (Alt para duplicar)'"
+        :title="isAltPressed ? 'Duplicar mega card (sólo el padre)' : 'Editar (Alt para duplicar, Cmd+Click para nueva pestaña)'"
         @click="handleEditClick"
       >
         <svg v-if="!isAltPressed" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -164,7 +178,7 @@ const handleTagClick = (tag: string) => {
           <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
           <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
         </svg>
-      </button>
+      </a>
     </div>
 
     <form v-if="hasSearch" class="megacard-search" @submit="handleSearchSubmit">
@@ -389,9 +403,11 @@ const handleTagClick = (tag: string) => {
   border: 0;
   color: var(--fg-faint, #a8a294);
   cursor: pointer;
+  text-decoration: none;
   transition: opacity 120ms ease, background 120ms ease;
 }
 .card-edit:hover { background: var(--bg-soft, #f3f1ec); color: var(--fg, #1c1a14); }
+.card-edit:focus-visible { opacity: 1; outline: 2px solid var(--fg, #1c1a14); outline-offset: 2px; }
 
 @media (max-width: 900px) {
   .megacard { grid-column: span 1; }
