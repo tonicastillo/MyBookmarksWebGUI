@@ -31,7 +31,7 @@ const validateConfig = (value: unknown): Record<string, unknown> => {
   return value as Record<string, unknown>
 }
 
-const KNOWN_TYPES = new Set<string>(['hello-world', 'unraid-docker'])
+const KNOWN_TYPES = new Set<string>(['hello-world', 'unraid-docker', 'notes'])
 
 router.post('/', (req, res) => {
   try {
