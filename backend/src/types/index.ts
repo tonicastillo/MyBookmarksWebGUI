@@ -40,6 +40,7 @@ export interface ApiResponse<T> {
   success: boolean
   data: T
   error?: string
+  details?: Record<string, unknown>
 }
 
 export interface User {

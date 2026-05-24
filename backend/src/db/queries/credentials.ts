@@ -111,13 +111,39 @@ export const deleteCredential = (id: string, userId: string): boolean => {
   return result.changes > 0
 }
 
-export const countWidgetsUsingCredential = (credentialId: string, userId: string): number => {
-  const row = db.prepare(`
-    SELECT COUNT(*) AS n
+export interface CredentialUsageBookmark {
+  id: string
+  name: string
+}
+
+export interface CredentialUsage {
+  count: number
+  bookmarks: CredentialUsageBookmark[]
+}
+
+export const getCredentialUsage = (credentialId: string, userId: string, sampleLimit = 3): CredentialUsage => {
+  const countRow = db.prepare(`
+    SELECT COUNT(DISTINCT b.id) AS n
       FROM widgets w
       JOIN bookmarks b ON b.id = w.bookmark_id
      WHERE b.user_id = ?
        AND json_extract(w.config, '$.credentialId') = ?
   `).get(userId, credentialId) as { n: number }
-  return row.n
+
+  if (countRow.n === 0) return { count: 0, bookmarks: [] }
+
+  const rows = db.prepare(`
+    SELECT b.id, b.name
+      FROM bookmarks b
+     WHERE b.user_id = ?
+       AND EXISTS (
+         SELECT 1 FROM widgets w
+          WHERE w.bookmark_id = b.id
+            AND json_extract(w.config, '$.credentialId') = ?
+       )
+     ORDER BY b.name COLLATE NOCASE
+     LIMIT ?
+  `).all(userId, credentialId, sampleLimit) as Array<{ id: string; name: string }>
+
+  return { count: countRow.n, bookmarks: rows }
 }

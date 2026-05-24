@@ -5,14 +5,15 @@ import {
   createCredential,
   updateCredential,
   deleteCredential,
-  countWidgetsUsingCredential
+  getCredentialUsage
 } from '../db/queries/credentials.js'
 import type { ApiResponse, Credential } from '../types/index.js'
 
 const router: IRouter = Router()
 
-const sendError = (res: Response, status: number, message: string) => {
+const sendError = (res: Response, status: number, message: string, details?: Record<string, unknown>) => {
   const response: ApiResponse<null> = { success: false, data: null, error: message }
+  if (details) response.details = details
   res.status(status).json(response)
 }
 
@@ -88,9 +89,15 @@ router.delete('/:id', (req, res) => {
   try {
     const existing = getCredentialByIdForUser(req.params.id, req.user!.id)
     if (!existing) return sendError(res, 404, 'Credencial no encontrada')
-    const inUse = countWidgetsUsingCredential(req.params.id, req.user!.id)
-    if (inUse > 0) {
-      return sendError(res, 409, `La credencial está en uso por ${inUse} widget(s). Reasígnalos o bórralos antes de eliminarla.`)
+    const usage = getCredentialUsage(req.params.id, req.user!.id)
+    if (usage.count > 0) {
+      const word = usage.count === 1 ? 'bookmark' : 'bookmarks'
+      return sendError(
+        res,
+        409,
+        `La credencial está en uso por ${usage.count} ${word}. Reasigna o borra los widgets antes de eliminarla.`,
+        { bookmarks: usage.bookmarks, count: usage.count }
+      )
     }
     deleteCredential(req.params.id, req.user!.id)
     const response: ApiResponse<{ id: string }> = { success: true, data: { id: req.params.id } }

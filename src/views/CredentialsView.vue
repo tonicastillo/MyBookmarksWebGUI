@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useCredentialsStore } from '@/stores/credentials'
 import { CREDENTIAL_TYPES, getCredentialType, type CredentialTypeDef } from '@/credentials/registry'
+import type { ApiError } from '@/api/notion'
 import type { Credential } from '@/types'
+
+const router = useRouter()
 
 const store = useCredentialsStore()
 
@@ -19,8 +23,19 @@ const editData = reactive<Record<string, string>>({})
 const editBusy = ref(false)
 const editError = ref<string | null>(null)
 
+const confirmingDeleteId = ref<string | null>(null)
 const deleteBusyId = ref<string | null>(null)
 const inlineErrorById = ref<Record<string, string | null>>({})
+
+interface UsageBookmark {
+  id: string
+  name: string
+}
+interface UsageInfo {
+  count: number
+  bookmarks: UsageBookmark[]
+}
+const usageById = ref<Record<string, UsageInfo | null>>({})
 
 const selectedTypeDef = computed<CredentialTypeDef | undefined>(() =>
   getCredentialType(selectedType.value)
@@ -151,17 +166,42 @@ const onSaveEdit = async () => {
   }
 }
 
-const onDelete = async (cred: Credential) => {
-  if (!confirm(`¿Borrar la credencial "${cred.name}"?`)) return
+const requestDelete = (cred: Credential) => {
+  confirmingDeleteId.value = cred.id
+  inlineErrorById.value[cred.id] = null
+  usageById.value[cred.id] = null
+}
+
+const cancelDelete = () => {
+  confirmingDeleteId.value = null
+}
+
+const confirmDelete = async (cred: Credential) => {
   deleteBusyId.value = cred.id
   inlineErrorById.value[cred.id] = null
+  usageById.value[cred.id] = null
   try {
     await store.remove(cred.id)
+    confirmingDeleteId.value = null
   } catch (e) {
-    inlineErrorById.value[cred.id] = e instanceof Error ? e.message : 'Error borrando credencial'
+    const apiErr = e as ApiError
+    inlineErrorById.value[cred.id] = apiErr?.message ?? 'Error borrando credencial'
+    const details = apiErr?.details
+    if (details && Array.isArray(details.bookmarks)) {
+      usageById.value[cred.id] = {
+        count: typeof details.count === 'number' ? details.count : details.bookmarks.length,
+        bookmarks: (details.bookmarks as UsageBookmark[]).filter(
+          (b) => b && typeof b.id === 'string' && typeof b.name === 'string'
+        )
+      }
+    }
   } finally {
     deleteBusyId.value = null
   }
+}
+
+const goToEditBookmark = (bookmarkId: string) => {
+  router.push(`/edit/${bookmarkId}`)
 }
 
 onMounted(() => {
@@ -269,19 +309,61 @@ onMounted(() => {
                 <div class="cred-head">
                   <span class="cred-name">{{ cred.name }}</span>
                 </div>
-                <div class="cred-actions">
+
+                <div v-if="confirmingDeleteId !== cred.id" class="cred-actions">
                   <button type="button" @click="startEdit(cred)">Editar</button>
                   <button
                     type="button"
                     class="danger"
                     :disabled="deleteBusyId === cred.id"
-                    @click="onDelete(cred)"
+                    @click="requestDelete(cred)"
                   >
                     Borrar
                   </button>
                 </div>
+
+                <div v-else class="confirm-dialog" role="alertdialog">
+                  <p class="confirm-text">
+                    ¿Borrar la credencial <strong>{{ cred.name }}</strong>? Esta acción no se puede deshacer.
+                  </p>
+                  <div class="form-actions row">
+                    <button
+                      type="button"
+                      class="danger"
+                      :disabled="deleteBusyId === cred.id"
+                      @click="confirmDelete(cred)"
+                    >
+                      {{ deleteBusyId === cred.id ? 'Borrando…' : 'Sí, borrar' }}
+                    </button>
+                    <button
+                      type="button"
+                      :disabled="deleteBusyId === cred.id"
+                      @click="cancelDelete"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+
                 <div v-if="inlineErrorById[cred.id]" class="error inline">
-                  {{ inlineErrorById[cred.id] }}
+                  <div>{{ inlineErrorById[cred.id] }}</div>
+                  <div v-if="usageById[cred.id]" class="usage">
+                    <div class="usage-title">Bookmarks afectados:</div>
+                    <ul class="usage-list">
+                      <li v-for="b in usageById[cred.id]!.bookmarks" :key="b.id">
+                        <button type="button" class="link" @click="goToEditBookmark(b.id)">
+                          {{ b.name }}
+                        </button>
+                      </li>
+                      <li
+                        v-if="usageById[cred.id]!.count > usageById[cred.id]!.bookmarks.length"
+                        class="usage-more"
+                      >
+                        … y {{ usageById[cred.id]!.count - usageById[cred.id]!.bookmarks.length }}
+                        más
+                      </li>
+                    </ul>
+                  </div>
                 </div>
               </template>
             </li>
@@ -469,4 +551,60 @@ button.danger:hover:not(:disabled) { background: rgba(176, 68, 68, 0.08); }
   border-radius: 6px;
 }
 .error.inline { margin-top: 4px; }
+
+.confirm-dialog {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(176, 68, 68, 0.06);
+  border: 0.5px solid rgba(176, 68, 68, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.confirm-text {
+  margin: 0;
+  font-size: 13px;
+  color: var(--fg, #1c1a14);
+  line-height: 1.4;
+}
+
+.usage {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 0.5px solid rgba(176, 68, 68, 0.2);
+}
+.usage-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-mid, #4a463c);
+  margin-bottom: 4px;
+}
+.usage-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.usage-list .link {
+  background: transparent;
+  border: 0;
+  padding: 2px 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--fg, #1c1a14);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  text-align: left;
+}
+.usage-list .link:hover { color: var(--fg-mid, #4a463c); }
+.usage-more {
+  font-size: 12px;
+  color: var(--fg-faint, #a8a294);
+  font-style: italic;
+}
 </style>

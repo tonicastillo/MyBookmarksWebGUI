@@ -6,13 +6,23 @@ const api = axios.create({
   withCredentials: true
 })
 
+export interface ApiError extends Error {
+  status?: number
+  details?: Record<string, unknown>
+}
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (axios.isAxiosError(error)) {
-      const body = error.response?.data as { error?: unknown } | undefined
+      const body = error.response?.data as { error?: unknown; details?: unknown } | undefined
       if (body && typeof body.error === 'string' && body.error) {
-        return Promise.reject(new Error(body.error))
+        const wrapped: ApiError = new Error(body.error)
+        wrapped.status = error.response?.status
+        if (body.details && typeof body.details === 'object' && !Array.isArray(body.details)) {
+          wrapped.details = body.details as Record<string, unknown>
+        }
+        return Promise.reject(wrapped)
       }
     }
     return Promise.reject(error)
