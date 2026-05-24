@@ -29,10 +29,9 @@ export const WIDGET_TYPES: WidgetTypeDef[] = [
     displayName: 'Unraid · Contenedor Docker',
     description: 'Controla un contenedor de un servidor Unraid (start/stop/restart) y muestra su estado.',
     defaultConfig: {
-      serverUrl: '',
-      serverLabel: '',
+      credentialId: '',
       containerName: '',
-      apiToken: ''
+      serverLabel: ''
     },
     ConfigComponent: UnraidDockerConfig,
     RenderComponent: UnraidDockerRender

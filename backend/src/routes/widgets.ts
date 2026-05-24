@@ -14,6 +14,7 @@ import {
   type UnraidActionName,
   type UnraidWidgetConfig
 } from '../widgets/unraid.js'
+import { getCredentialByIdForUser } from '../db/queries/credentials.js'
 import type { ApiResponse, Bookmark, Widget } from '../types/index.js'
 
 const router: IRouter = Router()
@@ -119,11 +120,27 @@ const getUnraidWidgetOrFail = (id: string, userId: string): { widget: Widget; co
   const widget = getWidgetByIdForUser(id, userId)
   if (!widget) return { error: 'Widget no encontrado', status: 404 }
   if (widget.type !== 'unraid-docker') return { error: 'Widget no es de tipo unraid-docker', status: 400 }
-  const cfg = widget.config as Partial<UnraidWidgetConfig>
-  if (!cfg.serverUrl || !cfg.containerName || !cfg.apiToken) {
-    return { error: 'Widget mal configurado: faltan serverUrl, containerName o apiToken', status: 400 }
+  const cfg = widget.config as { credentialId?: unknown; containerName?: unknown; serverLabel?: unknown }
+  const credentialId = typeof cfg.credentialId === 'string' ? cfg.credentialId : ''
+  const containerName = typeof cfg.containerName === 'string' ? cfg.containerName : ''
+  if (!credentialId) return { error: 'Widget mal configurado: falta credentialId', status: 400 }
+  if (!containerName) return { error: 'Widget mal configurado: falta containerName', status: 400 }
+  const credential = getCredentialByIdForUser(credentialId, userId)
+  if (!credential) return { error: 'Credencial no encontrada', status: 404 }
+  if (credential.type !== 'unraid') return { error: 'La credencial no es de tipo unraid', status: 400 }
+  const data = credential.data as { serverUrl?: unknown; apiToken?: unknown; serverLabel?: unknown }
+  const serverUrl = typeof data.serverUrl === 'string' ? data.serverUrl : ''
+  const apiToken = typeof data.apiToken === 'string' ? data.apiToken : ''
+  if (!serverUrl || !apiToken) {
+    return { error: 'Credencial unraid incompleta: faltan serverUrl o apiToken', status: 400 }
   }
-  return { widget, config: cfg as UnraidWidgetConfig }
+  const serverLabel = typeof cfg.serverLabel === 'string' && cfg.serverLabel
+    ? cfg.serverLabel
+    : (typeof data.serverLabel === 'string' ? data.serverLabel : '')
+  return {
+    widget,
+    config: { serverUrl, serverLabel, containerName, apiToken }
+  }
 }
 
 router.get('/:id/unraid/status', async (req, res) => {

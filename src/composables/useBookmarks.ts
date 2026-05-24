@@ -1,6 +1,7 @@
 import { computed } from 'vue'
 import { useBookmarksStore } from '@/stores/bookmarks'
 import { useCategoriesStore, type CategoryNode } from '@/stores/categories'
+import { useCredentialsStore } from '@/stores/credentials'
 import type { Category } from '@/types'
 import type { BookmarkGroup } from '@/composables/useBookmarkGroups'
 
@@ -12,6 +13,7 @@ export interface CategoryWithGroups {
 export const useBookmarks = () => {
   const bookmarksStore = useBookmarksStore()
   const categoriesStore = useCategoriesStore()
+  const credentialsStore = useCredentialsStore()
 
   const isLoading = computed(() => bookmarksStore.loading || categoriesStore.loading)
   const isRefreshing = computed(() => bookmarksStore.refreshing || categoriesStore.refreshing)
@@ -21,7 +23,8 @@ export const useBookmarks = () => {
   const loadData = async (forceRefresh = false) => {
     await Promise.all([
       bookmarksStore.loadBookmarks(forceRefresh),
-      categoriesStore.loadCategories(forceRefresh)
+      categoriesStore.loadCategories(forceRefresh),
+      credentialsStore.loadCredentials(forceRefresh)
     ])
   }
 

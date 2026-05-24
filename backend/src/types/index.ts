@@ -49,6 +49,16 @@ export interface User {
   createdAt: string
 }
 
+export interface Credential {
+  id: string
+  userId: string
+  type: string
+  name: string
+  data: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
 export interface AuthUser {
   id: string
   username: string

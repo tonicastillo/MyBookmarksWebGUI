@@ -7,10 +7,13 @@ import {
   type UnraidAction,
   type UnraidContainerInfo
 } from '@/api/widgets'
+import { useCredentialsStore } from '@/stores/credentials'
 
 const props = defineProps<{
   widget: Widget
 }>()
+
+const credentialsStore = useCredentialsStore()
 
 const status = ref<UnraidContainerInfo | null>(null)
 const loading = ref(false)
@@ -18,12 +21,22 @@ const actionInFlight = ref<UnraidAction | null>(null)
 const error = ref<string | null>(null)
 
 const cfg = computed(() => props.widget.config as {
-  serverUrl?: string
+  credentialId?: string
   serverLabel?: string
   containerName?: string
-  apiToken?: string
 })
-const hasConfig = computed(() => Boolean(cfg.value.serverUrl && cfg.value.containerName && cfg.value.apiToken))
+const credential = computed(() =>
+  cfg.value.credentialId ? credentialsStore.byId(cfg.value.credentialId) : undefined
+)
+const resolvedLabel = computed(() => {
+  if (cfg.value.serverLabel) return cfg.value.serverLabel
+  const credData = credential.value?.data as { serverLabel?: unknown } | undefined
+  if (credData && typeof credData.serverLabel === 'string' && credData.serverLabel) {
+    return credData.serverLabel
+  }
+  return credential.value?.name ?? 'Unraid'
+})
+const hasConfig = computed(() => Boolean(cfg.value.credentialId && cfg.value.containerName))
 
 const stateClass = computed(() => {
   const s = status.value?.state?.toLowerCase()
@@ -201,12 +214,12 @@ onBeforeUnmount(() => {
 <template>
   <div ref="rootRef" class="unr-render" @click="stopProp">
     <div v-if="!hasConfig" class="unr-warn">
-      Widget Unraid sin configurar. Edita el bookmark para añadir servidor, contenedor y token.
+      Widget Unraid sin configurar. Edita el bookmark para asignar una credencial y un contenedor.
     </div>
 
     <template v-else>
       <div class="unr-head">
-        <span class="unr-server">{{ cfg.serverLabel || 'Unraid' }}</span>
+        <span class="unr-server">{{ resolvedLabel }}</span>
         <span v-if="elapsedText" class="unr-elapsed" :title="`Última actualización hace ${elapsedText}`">{{ elapsedText }}</span>
         <button
           type="button"

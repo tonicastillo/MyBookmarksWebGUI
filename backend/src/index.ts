@@ -21,6 +21,7 @@ const startServer = async () => {
   const { default: widgetsRouter } = await import('./routes/widgets.js')
   const { default: authRouter } = await import('./routes/auth.js')
   const { default: usersRouter } = await import('./routes/users.js')
+  const { default: credentialsRouter } = await import('./routes/credentials.js')
   const { requireAuth } = await import('./middleware/auth.js')
   const { bookmarkBelongsToUser } = await import('./db/queries/bookmarks.js')
   const { purgeExpiredSessions } = await import('./db/queries/sessions.js')
@@ -45,6 +46,7 @@ const startServer = async () => {
   app.use('/api/bookmarks', requireAuth, bookmarksRouter)
   app.use('/api/categories', requireAuth, categoriesRouter)
   app.use('/api/widgets', requireAuth, widgetsRouter)
+  app.use('/api/credentials', requireAuth, credentialsRouter)
 
   app.get('/images/:filename', requireAuth, (req, res) => {
     const filename = req.params.filename

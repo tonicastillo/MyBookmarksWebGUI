@@ -62,3 +62,13 @@ export interface ApiResponse<T> {
   data: T
   error?: string
 }
+
+export interface Credential {
+  id: string
+  userId: string
+  type: string
+  name: string
+  data: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}

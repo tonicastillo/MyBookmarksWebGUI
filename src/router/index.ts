@@ -4,6 +4,7 @@ import EditView from '@/views/EditView.vue'
 import CategoriesView from '@/views/CategoriesView.vue'
 import LoginView from '@/views/LoginView.vue'
 import UsersView from '@/views/UsersView.vue'
+import CredentialsView from '@/views/CredentialsView.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const router = createRouter({
@@ -32,6 +33,12 @@ const router = createRouter({
       name: 'users',
       component: UsersView,
       meta: { requiresAuth: true, requiresAdmin: true }
+    },
+    {
+      path: '/settings/credentials',
+      name: 'credentials',
+      component: CredentialsView,
+      meta: { requiresAuth: true }
     },
     {
       path: '/login',
