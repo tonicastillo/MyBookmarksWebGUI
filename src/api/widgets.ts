@@ -60,3 +60,30 @@ export const runUnraidAction = async (widgetId: string, action: UnraidAction): P
   const response = await api.post<ApiResponse<UnraidContainerInfo>>(`/widgets/${widgetId}/unraid/action`, { action })
   return unwrap(response)
 }
+
+export interface HomeAssistantEntityState {
+  entityId: string
+  label?: string
+  state: string | null
+  attributes: Record<string, unknown> | null
+  lastChanged: string | null
+  lastUpdated: string | null
+  error?: string
+}
+
+export const fetchHomeAssistantState = async (widgetId: string): Promise<HomeAssistantEntityState[]> => {
+  const response = await api.get<ApiResponse<HomeAssistantEntityState[]>>(`/widgets/${widgetId}/homeassistant/state`)
+  return unwrap(response)
+}
+
+export const runHomeAssistantAction = async (
+  widgetId: string,
+  entityIndex: number,
+  actionIndex: number
+): Promise<HomeAssistantEntityState[]> => {
+  const response = await api.post<ApiResponse<HomeAssistantEntityState[]>>(
+    `/widgets/${widgetId}/homeassistant/action`,
+    { entityIndex, actionIndex }
+  )
+  return unwrap(response)
+}

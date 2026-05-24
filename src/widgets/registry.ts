@@ -5,6 +5,8 @@ import UnraidDockerConfig from './unraid-docker/UnraidDockerConfig.vue'
 import UnraidDockerRender from './unraid-docker/UnraidDockerRender.vue'
 import NotesConfig from './notes/NotesConfig.vue'
 import NotesRender from './notes/NotesRender.vue'
+import HomeAssistantConfig from './home-assistant/HomeAssistantConfig.vue'
+import HomeAssistantRender from './home-assistant/HomeAssistantRender.vue'
 
 export interface WidgetTypeDef {
   type: string
@@ -43,6 +45,14 @@ export const WIDGET_TYPES: WidgetTypeDef[] = [
     defaultConfig: { notes: [] },
     ConfigComponent: NotesConfig,
     RenderComponent: NotesRender
+  },
+  {
+    type: 'home-assistant',
+    displayName: 'Home Assistant · Dashboard',
+    description: 'Tarjeta con varias entidades de Home Assistant y botones para llamar servicios.',
+    defaultConfig: { credentialId: '', title: '', pollIntervalSec: 10, entities: [] },
+    ConfigComponent: HomeAssistantConfig,
+    RenderComponent: HomeAssistantRender
   }
 ]
 

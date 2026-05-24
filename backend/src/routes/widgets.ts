@@ -14,6 +14,13 @@ import {
   type UnraidActionName,
   type UnraidWidgetConfig
 } from '../widgets/unraid.js'
+import {
+  fetchHomeAssistantStates,
+  callHomeAssistantService,
+  type HomeAssistantConnection,
+  type HomeAssistantEntityConfig,
+  type HomeAssistantServiceCall
+} from '../widgets/home-assistant.js'
 import { getCredentialByIdForUser } from '../db/queries/credentials.js'
 import type { ApiResponse, Bookmark, Widget } from '../types/index.js'
 
@@ -32,7 +39,7 @@ const validateConfig = (value: unknown): Record<string, unknown> => {
   return value as Record<string, unknown>
 }
 
-const KNOWN_TYPES = new Set<string>(['hello-world', 'unraid-docker', 'notes'])
+const KNOWN_TYPES = new Set<string>(['hello-world', 'unraid-docker', 'notes', 'home-assistant'])
 
 router.post('/', (req, res) => {
   try {
@@ -170,6 +177,111 @@ router.post('/:id/unraid/action', async (req, res) => {
     res.json(response)
   } catch (err) {
     console.error('[unraid] action error:', err)
+    sendError(res, 502, err instanceof Error ? err.message : 'Error ejecutando acción')
+  }
+})
+
+interface HomeAssistantResolvedAction {
+  widget: Widget
+  conn: HomeAssistantConnection
+  entities: HomeAssistantEntityConfig[]
+  actions: HomeAssistantServiceCall[][]
+}
+
+const parseEntities = (raw: unknown): { entities: HomeAssistantEntityConfig[]; actions: HomeAssistantServiceCall[][] } | null => {
+  if (!Array.isArray(raw)) return null
+  const entities: HomeAssistantEntityConfig[] = []
+  const actions: HomeAssistantServiceCall[][] = []
+  for (const item of raw) {
+    if (typeof item !== 'object' || item === null) return null
+    const e = item as { entityId?: unknown; label?: unknown; actions?: unknown }
+    if (typeof e.entityId !== 'string' || !e.entityId) return null
+    entities.push({
+      entityId: e.entityId,
+      label: typeof e.label === 'string' && e.label ? e.label : undefined
+    })
+    const rowActions: HomeAssistantServiceCall[] = []
+    if (Array.isArray(e.actions)) {
+      for (const a of e.actions) {
+        if (typeof a !== 'object' || a === null) return null
+        const action = a as { domain?: unknown; service?: unknown; serviceData?: unknown; label?: unknown }
+        if (typeof action.domain !== 'string' || !action.domain) return null
+        if (typeof action.service !== 'string' || !action.service) return null
+        const serviceData = action.serviceData
+        rowActions.push({
+          domain: action.domain,
+          service: action.service,
+          serviceData: typeof serviceData === 'object' && serviceData !== null && !Array.isArray(serviceData)
+            ? serviceData as Record<string, unknown>
+            : undefined
+        })
+      }
+    }
+    actions.push(rowActions)
+  }
+  return { entities, actions }
+}
+
+const getHomeAssistantWidgetOrFail = (id: string, userId: string): HomeAssistantResolvedAction | { error: string; status: number } => {
+  const widget = getWidgetByIdForUser(id, userId)
+  if (!widget) return { error: 'Widget no encontrado', status: 404 }
+  if (widget.type !== 'home-assistant') return { error: 'Widget no es de tipo home-assistant', status: 400 }
+  const cfg = widget.config as { credentialId?: unknown; entities?: unknown }
+  const credentialId = typeof cfg.credentialId === 'string' ? cfg.credentialId : ''
+  if (!credentialId) return { error: 'Widget mal configurado: falta credentialId', status: 400 }
+  const credential = getCredentialByIdForUser(credentialId, userId)
+  if (!credential) return { error: 'Credencial no encontrada', status: 404 }
+  if (credential.type !== 'homeassistant') return { error: 'La credencial no es de tipo homeassistant', status: 400 }
+  const data = credential.data as { baseUrl?: unknown; accessToken?: unknown }
+  const baseUrl = typeof data.baseUrl === 'string' ? data.baseUrl : ''
+  const accessToken = typeof data.accessToken === 'string' ? data.accessToken : ''
+  if (!baseUrl || !accessToken) {
+    return { error: 'Credencial homeassistant incompleta: faltan baseUrl o accessToken', status: 400 }
+  }
+  const parsed = parseEntities(cfg.entities)
+  if (!parsed) return { error: 'Widget mal configurado: entities inválido', status: 400 }
+  return {
+    widget,
+    conn: { baseUrl, accessToken },
+    entities: parsed.entities,
+    actions: parsed.actions
+  }
+}
+
+router.get('/:id/homeassistant/state', async (req, res) => {
+  const lookup = getHomeAssistantWidgetOrFail(req.params.id, req.user!.id)
+  if ('error' in lookup) return sendError(res, lookup.status, lookup.error)
+  try {
+    const data = await fetchHomeAssistantStates(lookup.conn, lookup.entities)
+    const response: ApiResponse<typeof data> = { success: true, data }
+    res.json(response)
+  } catch (err) {
+    console.error('[homeassistant] state error:', err)
+    sendError(res, 502, err instanceof Error ? err.message : 'Error consultando Home Assistant')
+  }
+})
+
+router.post('/:id/homeassistant/action', async (req, res) => {
+  const lookup = getHomeAssistantWidgetOrFail(req.params.id, req.user!.id)
+  if ('error' in lookup) return sendError(res, lookup.status, lookup.error)
+  const body = req.body as { entityIndex?: unknown; actionIndex?: unknown }
+  const entityIndex = typeof body.entityIndex === 'number' ? body.entityIndex : -1
+  const actionIndex = typeof body.actionIndex === 'number' ? body.actionIndex : -1
+  if (!Number.isInteger(entityIndex) || entityIndex < 0 || entityIndex >= lookup.entities.length) {
+    return sendError(res, 400, 'entityIndex fuera de rango')
+  }
+  const entityActions = lookup.actions[entityIndex]
+  if (!Number.isInteger(actionIndex) || actionIndex < 0 || actionIndex >= entityActions.length) {
+    return sendError(res, 400, 'actionIndex fuera de rango')
+  }
+  const call = entityActions[actionIndex]
+  try {
+    await callHomeAssistantService(lookup.conn, call)
+    const data = await fetchHomeAssistantStates(lookup.conn, lookup.entities)
+    const response: ApiResponse<typeof data> = { success: true, data }
+    res.json(response)
+  } catch (err) {
+    console.error('[homeassistant] action error:', err)
     sendError(res, 502, err instanceof Error ? err.message : 'Error ejecutando acción')
   }
 })

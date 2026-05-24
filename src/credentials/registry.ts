@@ -43,6 +43,28 @@ export const CREDENTIAL_TYPES: CredentialTypeDef[] = [
         hint: 'Se envía como cabecera x-api-key al endpoint /graphql.'
       }
     ]
+  },
+  {
+    type: 'homeassistant',
+    displayName: 'Home Assistant',
+    description: 'URL base + Long-Lived Access Token para llamar a la REST API de Home Assistant.',
+    fields: [
+      {
+        key: 'baseUrl',
+        label: 'URL base',
+        type: 'url',
+        placeholder: 'https://homeassistant.local:8123',
+        required: true
+      },
+      {
+        key: 'accessToken',
+        label: 'Access Token',
+        type: 'password',
+        placeholder: '••••••••',
+        required: true,
+        hint: 'Crea un Long-Lived Access Token en tu perfil de Home Assistant.'
+      }
+    ]
   }
 ]
 
