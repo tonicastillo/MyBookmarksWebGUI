@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { searchIcons, type IconHit } from '@/lib/icons'
 import Icon from './Icon.vue'
 
@@ -20,13 +20,19 @@ const emit = defineEmits<{
 
 const open = ref(false)
 const wrapper = ref<HTMLElement | null>(null)
+const triggerEl = ref<HTMLButtonElement | null>(null)
+const popoverEl = ref<HTMLElement | null>(null)
 const searchInput = ref<HTMLInputElement | null>(null)
 const query = ref('')
 const results = ref<IconHit[]>([])
 const loading = ref(false)
 const loadError = ref<string | null>(null)
+const popoverStyle = ref<{ top: string; left: string }>({ top: '0px', left: '0px' })
 
 const RESULT_LIMIT = 240
+const POPOVER_WIDTH = 320
+const POPOVER_MAX_HEIGHT = 380
+const MARGIN = 8
 
 const currentLocalName = computed(() => {
   if (!props.modelValue) return ''
@@ -53,19 +59,92 @@ const runSearch = async (q: string): Promise<void> => {
   }
 }
 
-const toggle = async (): Promise<void> => {
-  if (props.disabled) return
-  open.value = !open.value
-  if (open.value) {
-    await nextTick()
-    searchInput.value?.focus()
-    if (results.value.length === 0) {
-      await runSearch(query.value)
-    }
+const positionPopover = (): void => {
+  if (!triggerEl.value) return
+  const t = triggerEl.value.getBoundingClientRect()
+  const vw = window.innerWidth || document.documentElement.clientWidth
+  const vh = window.innerHeight || document.documentElement.clientHeight
+
+  let left = t.left
+  if (left + POPOVER_WIDTH > vw - MARGIN) {
+    left = Math.max(MARGIN, vw - POPOVER_WIDTH - MARGIN)
+  }
+  if (left < MARGIN) left = MARGIN
+
+  let top = t.bottom + 6
+  if (top + POPOVER_MAX_HEIGHT > vh - MARGIN && t.top - POPOVER_MAX_HEIGHT - 6 > MARGIN) {
+    top = t.top - POPOVER_MAX_HEIGHT - 6
+  }
+
+  popoverStyle.value = { top: `${top}px`, left: `${left}px` }
+}
+
+const supportsPopover = (el: HTMLElement | null): el is HTMLElement & { showPopover(): void; hidePopover(): void } =>
+  !!el && typeof (el as { showPopover?: unknown }).showPopover === 'function'
+
+const showPopover = async (): Promise<void> => {
+  if (!popoverEl.value) return
+  positionPopover()
+  if (supportsPopover(popoverEl.value)) {
+    try { popoverEl.value.showPopover() } catch { /* ya abierto */ }
+  } else {
+    // Fallback para navegadores sin Popover API
+    open.value = true
+  }
+  await nextTick()
+  searchInput.value?.focus()
+  if (results.value.length === 0) {
+    await runSearch(query.value)
   }
 }
 
-const close = (): void => { open.value = false }
+const hidePopover = (): void => {
+  if (!popoverEl.value) {
+    open.value = false
+    return
+  }
+  if (supportsPopover(popoverEl.value)) {
+    try { popoverEl.value.hidePopover() } catch { /* ya cerrado */ }
+  } else {
+    open.value = false
+  }
+}
+
+const toggle = async (): Promise<void> => {
+  if (props.disabled) return
+  if (open.value) hidePopover()
+  else await showPopover()
+}
+
+const onPopoverToggle = (event: Event): void => {
+  const e = event as Event & { newState?: string }
+  open.value = e.newState === 'open'
+}
+
+const close = (): void => { hidePopover() }
+
+const onScroll = (event: Event): void => {
+  if (!open.value) return
+  // Ignorar scroll generado dentro del propio popover (ej. al recorrer el grid de iconos)
+  const target = event.target as Node | null
+  if (target && popoverEl.value && popoverEl.value.contains(target)) return
+  // Si el trigger ya no está visible en el viewport, cerrar; si sigue visible, reposicionar
+  if (triggerEl.value) {
+    const t = triggerEl.value.getBoundingClientRect()
+    const vw = window.innerWidth || document.documentElement.clientWidth
+    const vh = window.innerHeight || document.documentElement.clientHeight
+    const outOfView = t.bottom < 0 || t.top > vh || t.right < 0 || t.left > vw
+    if (outOfView) {
+      hidePopover()
+      return
+    }
+  }
+  positionPopover()
+}
+
+const onResize = (): void => {
+  if (open.value) positionPopover()
+}
 
 const select = (name: string | null): void => {
   emit('update:modelValue', name)
@@ -84,7 +163,12 @@ watch(query, (next) => {
 
 const onDocumentClick = (event: MouseEvent): void => {
   if (!open.value) return
-  if (wrapper.value && !wrapper.value.contains(event.target as Node)) close()
+  const target = event.target as Node | null
+  if (!target) return
+  // Click dentro del wrapper (trigger) o dentro del popover (que puede estar en top layer) → no cerrar
+  if (wrapper.value && wrapper.value.contains(target)) return
+  if (popoverEl.value && popoverEl.value.contains(target)) return
+  close()
 }
 
 const onKeydown = (event: KeyboardEvent): void => {
@@ -101,9 +185,16 @@ watch(open, (isOpen) => {
   }
 })
 
+onMounted(() => {
+  window.addEventListener('scroll', onScroll, true)
+  window.addEventListener('resize', onResize)
+})
+
 onBeforeUnmount(() => {
   document.removeEventListener('mousedown', onDocumentClick)
   document.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('scroll', onScroll, true)
+  window.removeEventListener('resize', onResize)
   if (debounceTimer) clearTimeout(debounceTimer)
 })
 
@@ -113,6 +204,7 @@ const isSelected = (name: string): boolean => props.modelValue === name
 <template>
   <div ref="wrapper" class="icon-picker">
     <button
+      ref="triggerEl"
       type="button"
       class="trigger"
       :class="{ empty: !modelValue }"
@@ -126,7 +218,17 @@ const isSelected = (name: string): boolean => props.modelValue === name
       <span class="trigger-label">{{ modelValue ? currentLocalName : placeholder }}</span>
     </button>
 
-    <div v-if="open" class="popover" role="dialog" @click.stop>
+    <div
+      v-show="open"
+      ref="popoverEl"
+      popover="manual"
+      class="popover"
+      role="dialog"
+      :style="popoverStyle"
+      @toggle="onPopoverToggle"
+      @mousedown.stop
+      @click.stop
+    >
       <input
         ref="searchInput"
         v-model="query"
@@ -211,19 +313,29 @@ const isSelected = (name: string): boolean => props.modelValue === name
 }
 
 .popover {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 60;
+  position: fixed;
+  inset: auto;
+  margin: 0;
   width: 320px;
+  max-height: 380px;
   background: var(--bg-elev, #ffffff);
   border: 0.5px solid var(--border, rgba(28, 26, 20, 0.16));
   border-radius: 10px;
   padding: 10px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
-  display: flex;
+  color: inherit;
   flex-direction: column;
   gap: 8px;
+}
+.popover:popover-open {
+  display: flex;
+}
+/* Fallback para navegadores sin Popover API: lo abrimos vía v-show + display: flex */
+@supports not (selector(:popover-open)) {
+  .popover {
+    display: flex;
+    z-index: 60;
+  }
 }
 
 .search {
