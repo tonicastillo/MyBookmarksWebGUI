@@ -6,6 +6,19 @@ const api = axios.create({
   withCredentials: true
 })
 
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (axios.isAxiosError(error)) {
+      const body = error.response?.data as { error?: unknown } | undefined
+      if (body && typeof body.error === 'string' && body.error) {
+        return Promise.reject(new Error(body.error))
+      }
+    }
+    return Promise.reject(error)
+  }
+)
+
 export { api }
 
 const unwrap = <T>(response: { data: ApiResponse<T> }): T => {
