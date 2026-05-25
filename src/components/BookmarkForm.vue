@@ -341,13 +341,14 @@ const toggleSvgColor = (color: string) => {
 const applySvgColor = (newColor: string | null) => {
   if (!newColor || !svgContent.value || selectedSvgColors.value.size === 0)
     return;
+  const normalized = normalizeColor(newColor);
   svgContent.value = replaceColorsInSvg(
     svgContent.value,
     selectedSvgColors.value,
-    newColor,
+    normalized,
   );
   svgModified.value = true;
-  selectedSvgColors.value = new Set();
+  selectedSvgColors.value = new Set([normalized]);
 };
 
 const loadSvgFromFile = (file: File) => {
