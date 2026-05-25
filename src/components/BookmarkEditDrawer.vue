@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, shallowRef, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useEditDrawerStore } from '@/stores/editDrawer'
 import { useBookmarksStore } from '@/stores/bookmarks'
@@ -22,6 +22,16 @@ const submitting = ref(false)
 const errorMessage = ref<string | null>(null)
 const currentBookmarkId = ref<string | undefined>(undefined)
 const prefill = shallowRef<BookmarkDuplicateData | null>(null)
+const formRef = ref<InstanceType<typeof BookmarkForm> | null>(null)
+
+const isFormDirty = () => Boolean(formRef.value?.checkDirty?.())
+
+const confirmDiscard = () =>
+  !isFormDirty() || confirm('Tienes cambios sin guardar. ¿Salir igualmente?')
+
+const tryClose = () => {
+  if (confirmDiscard()) drawer.close()
+}
 
 const bookmark = computed(() =>
   currentBookmarkId.value
@@ -59,9 +69,20 @@ const unlockScroll = () => {
 const handleEscape = (event: KeyboardEvent) => {
   if (event.key === 'Escape' && drawer.isOpen) {
     event.preventDefault()
-    drawer.close()
+    tryClose()
   }
 }
+
+const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+  if (drawer.isOpen && isFormDirty()) {
+    event.preventDefault()
+    event.returnValue = ''
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('beforeunload', handleBeforeUnload)
+})
 
 watch(
   () => drawer.isOpen,
@@ -79,13 +100,14 @@ watch(
 watch(
   () => route.fullPath,
   () => {
-    if (drawer.isOpen) drawer.close()
+    if (drawer.isOpen) tryClose()
   },
 )
 
 onUnmounted(() => {
   unlockScroll()
   window.removeEventListener('keydown', handleEscape)
+  window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 
 const handleSubmit = async (payload: {
@@ -114,6 +136,8 @@ const handleSubmit = async (payload: {
       await bookmarksStore.removeImage(savedId)
     }
 
+    formRef.value?.markSaved()
+
     if (!currentBookmarkId.value) {
       currentBookmarkId.value = savedId
       prefill.value = null
@@ -133,6 +157,7 @@ const handleDelete = async () => {
   submitting.value = true
   try {
     await bookmarksStore.remove(currentBookmarkId.value)
+    formRef.value?.markSaved()
     drawer.close()
   } catch (err) {
     errorMessage.value = err instanceof Error ? err.message : 'Error borrando'
@@ -141,11 +166,11 @@ const handleDelete = async () => {
 }
 
 const handleCancel = () => {
-  drawer.close()
+  tryClose()
 }
 
 const handleBackdropClick = () => {
-  drawer.close()
+  tryClose()
 }
 </script>
 
@@ -168,7 +193,7 @@ const handleBackdropClick = () => {
               type="button"
               class="drawer-close"
               aria-label="Cerrar"
-              @click="drawer.close()"
+              @click="tryClose()"
             >
               <svg
                 width="18"
@@ -190,6 +215,7 @@ const handleBackdropClick = () => {
             <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
 
             <BookmarkForm
+              ref="formRef"
               :key="`form-${drawer.sessionKey}-${currentBookmarkId ?? 'new'}`"
               :bookmark="bookmark"
               :default-category-id="drawer.defaultCategoryId"

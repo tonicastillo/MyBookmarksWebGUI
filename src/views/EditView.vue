@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, shallowRef } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useBookmarksStore } from '@/stores/bookmarks'
 import { useCategoriesStore } from '@/stores/categories'
 import BookmarkForm from '@/components/BookmarkForm.vue'
@@ -37,12 +37,32 @@ const prefill = shallowRef<BookmarkDuplicateData | null>(
 
 const submitting = ref(false)
 const errorMessage = ref<string | null>(null)
+const formRef = ref<InstanceType<typeof BookmarkForm> | null>(null)
+
+const isFormDirty = () => Boolean(formRef.value?.checkDirty?.())
+
+const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+  if (isFormDirty()) {
+    e.preventDefault()
+    e.returnValue = ''
+  }
+}
 
 onMounted(async () => {
+  window.addEventListener('beforeunload', handleBeforeUnload)
   await Promise.all([
     bookmarksStore.loadBookmarks(),
     categoriesStore.loadCategories()
   ])
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+})
+
+onBeforeRouteLeave(() => {
+  if (!isFormDirty()) return true
+  return confirm('Tienes cambios sin guardar. ¿Salir igualmente?')
 })
 
 const handleSubmit = async (payload: { input: BookmarkInput; imageFile: File | null; removeImage: boolean }) => {
@@ -65,6 +85,8 @@ const handleSubmit = async (payload: { input: BookmarkInput; imageFile: File | n
       await bookmarksStore.removeImage(savedId)
     }
 
+    formRef.value?.markSaved()
+
     if (isCreating) {
       router.replace(`/edit/${savedId}`)
     } else {
@@ -83,6 +105,7 @@ const handleDelete = async () => {
   submitting.value = true
   try {
     await bookmarksStore.remove(id.value)
+    formRef.value?.markSaved()
     router.push('/')
   } catch (err) {
     errorMessage.value = err instanceof Error ? err.message : 'Error borrando'
@@ -105,6 +128,7 @@ const handleCancel = () => {
     <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
 
     <BookmarkForm
+      ref="formRef"
       :bookmark="bookmark"
       :default-category-id="defaultCategoryId"
       :default-parent-bookmark-id="defaultParentBookmarkId"

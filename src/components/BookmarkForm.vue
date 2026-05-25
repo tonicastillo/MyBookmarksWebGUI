@@ -206,6 +206,37 @@ const svgContent = ref<string | null>(null);
 const svgModified = ref(false);
 const selectedSvgColors = ref<Set<string>>(new Set());
 
+const buildSnapshot = () =>
+  JSON.stringify({
+    name: name.value,
+    url: url.value,
+    subtitle: subtitle.value,
+    categoryId: categoryId.value,
+    parentBookmarkId: parentBookmarkId.value,
+    visibleAtStart: visibleAtStart.value,
+    isMegaCard: isMegaCard.value,
+    color: color.value,
+    searchPlaceholder: searchPlaceholder.value,
+    searchUrlTemplate: searchUrlTemplate.value,
+    imageScale: imageScale.value,
+    imageBgColor: imageBgColor.value,
+    imageBgColor2: imageBgColor2.value,
+    useGradient: useGradient.value,
+    tags: [...tags.value],
+    imageFileName: imageFile.value?.name ?? null,
+    imageFileSize: imageFile.value?.size ?? null,
+    removeImage: removeImage.value,
+    svgModified: svgModified.value,
+  });
+
+const initialSnapshot = ref(buildSnapshot());
+const checkDirty = () => buildSnapshot() !== initialSnapshot.value;
+const markSaved = () => {
+  initialSnapshot.value = buildSnapshot();
+};
+
+defineExpose({ checkDirty, markSaved });
+
 const SKIP_COLOR = new Set([
   "none",
   "transparent",
@@ -500,6 +531,11 @@ watch(
     imageBgColor2.value = b.imageBgColor2 ?? null;
     useGradient.value = Boolean(b.imageBgColor2);
     tags.value = [...b.tags];
+    imageFile.value = null;
+    imagePreview.value = null;
+    removeImage.value = false;
+    svgModified.value = false;
+    initialSnapshot.value = buildSnapshot();
   },
 );
 </script>
