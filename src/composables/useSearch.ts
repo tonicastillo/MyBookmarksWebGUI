@@ -1,31 +1,26 @@
 import { ref, watch } from 'vue'
 
-export const useSearch = (debounceMs = 300) => {
-  const searchQuery = ref('')
-  const debouncedQuery = ref('')
-  let timeoutId: ReturnType<typeof setTimeout> | null = null
+const DEBOUNCE_MS = 300
 
-  watch(searchQuery, (newValue) => {
-    if (timeoutId) {
-      clearTimeout(timeoutId)
-    }
+const searchQuery = ref('')
+const debouncedQuery = ref('')
+let timeoutId: ReturnType<typeof setTimeout> | null = null
 
-    timeoutId = setTimeout(() => {
-      debouncedQuery.value = newValue
-    }, debounceMs)
-  })
+watch(searchQuery, (newValue) => {
+  if (timeoutId) clearTimeout(timeoutId)
+  timeoutId = setTimeout(() => {
+    debouncedQuery.value = newValue
+  }, DEBOUNCE_MS)
+})
 
-  const clearSearch = () => {
-    searchQuery.value = ''
-    debouncedQuery.value = ''
-    if (timeoutId) {
-      clearTimeout(timeoutId)
-    }
-  }
-
-  return {
-    searchQuery,
-    debouncedQuery,
-    clearSearch
-  }
+const clearSearch = () => {
+  searchQuery.value = ''
+  debouncedQuery.value = ''
+  if (timeoutId) clearTimeout(timeoutId)
 }
+
+export const useSearch = () => ({
+  searchQuery,
+  debouncedQuery,
+  clearSearch,
+})

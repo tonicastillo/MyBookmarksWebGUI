@@ -6,13 +6,17 @@ import { useBookmarksStore } from "@/stores/bookmarks";
 import { useCategoriesStore } from "@/stores/categories";
 import { hueFromHex } from "@/composables/useColorHue";
 import { useCategoryFilter } from "@/composables/useCategoryFilter";
+import { useSearch } from "@/composables/useSearch";
+import { useTags } from "@/composables/useTags";
 import { useAuthStore } from "@/stores/auth";
 
 const router = useRouter();
 const { getCategoriesWithVisibleGroups } = useBookmarks();
 const bookmarksStore = useBookmarksStore();
 const categoriesStore = useCategoriesStore();
-const { categoryFilter, setFilter } = useCategoryFilter();
+const { categoryFilter, setFilter, clearFilter } = useCategoryFilter();
+const { clearSearch } = useSearch();
+const { clearTags } = useTags();
 const auth = useAuthStore();
 
 const onLogout = async () => {
@@ -246,7 +250,14 @@ const handleBrandClick = (event: MouseEvent) => {
   if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0)
     return;
   event.preventDefault();
-  goTo("/");
+  clearSearch();
+  clearTags();
+  clearFilter();
+  expandedId.value = null;
+  activeId.value = null;
+  router.push("/");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  emit("navigate");
 };
 
 const isFilterActiveForIds = (ids: string[]): boolean => {
