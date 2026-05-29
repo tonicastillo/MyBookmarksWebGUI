@@ -26,6 +26,17 @@ import type { ApiResponse, Bookmark, Widget } from '../types/index.js'
 
 const router: IRouter = Router()
 
+const errorLogLastAt = new Map<string, number>()
+const ERROR_LOG_THROTTLE_MS = 30_000
+
+const logThrottled = (key: string, message: string) => {
+  const now = Date.now()
+  const last = errorLogLastAt.get(key) ?? 0
+  if (now - last < ERROR_LOG_THROTTLE_MS) return
+  errorLogLastAt.set(key, now)
+  console.warn(message)
+}
+
 const sendError = (res: Response, status: number, message: string) => {
   const response: ApiResponse<null> = { success: false, data: null, error: message }
   res.status(status).json(response)
@@ -158,8 +169,9 @@ router.get('/:id/unraid/status', async (req, res) => {
     const response: ApiResponse<typeof data> = { success: true, data }
     res.json(response)
   } catch (err) {
-    console.error('[unraid] status error:', err)
-    sendError(res, 502, err instanceof Error ? err.message : 'Error consultando Unraid')
+    const message = err instanceof Error ? err.message : 'Error consultando Unraid'
+    logThrottled(`unraid:status:${req.params.id}:${message}`, `[unraid] status error (widget ${req.params.id}): ${message}`)
+    sendError(res, 502, message)
   }
 })
 

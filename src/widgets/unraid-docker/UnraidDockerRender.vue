@@ -74,7 +74,20 @@ const rootRef = ref<HTMLElement | null>(null)
 const isVisible = ref(false)
 
 const CACHE_TTL_MS = 5 * 60 * 1000
+const RETRY_DELAYS_MS = [30_000, 60_000, 120_000, 300_000]
+const lastAttemptedAt = ref<number | null>(null)
+let consecutiveFailures = 0
 const cacheKey = computed(() => `unraid-widget:${props.widget.id}`)
+
+const friendlyError = (msg: string): string => {
+  if (/ECONNREFUSED/i.test(msg)) return 'Servidor Unraid no accesible'
+  if (/ETIMEDOUT|ECONNABORTED|timeout/i.test(msg)) return 'Tiempo de espera agotado'
+  if (/ENOTFOUND|EAI_AGAIN|getaddrinfo/i.test(msg)) return 'No se encuentra el servidor'
+  if (/ECONNRESET|socket hang up/i.test(msg)) return 'Conexión interrumpida'
+  if (/HTTP 401|Unauthorized/i.test(msg)) return 'Credenciales inválidas'
+  if (/HTTP 5\d\d/.test(msg)) return 'Error en el servidor Unraid'
+  return msg
+}
 
 const loadFromCache = (): { status: UnraidContainerInfo; lastUpdatedAt: number } | null => {
   try {
@@ -117,10 +130,14 @@ const refresh = async () => {
     status.value = await fetchUnraidStatus(props.widget.id)
     lastUpdatedAt.value = Date.now()
     nowMs.value = lastUpdatedAt.value
+    consecutiveFailures = 0
     saveToCache()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Error consultando Unraid'
+    const raw = err instanceof Error ? err.message : 'Error consultando Unraid'
+    error.value = friendlyError(raw)
+    consecutiveFailures += 1
   } finally {
+    lastAttemptedAt.value = Date.now()
     loading.value = false
   }
 }
@@ -133,19 +150,27 @@ const doAction = async (action: UnraidAction) => {
     status.value = await runUnraidAction(props.widget.id, action)
     lastUpdatedAt.value = Date.now()
     nowMs.value = lastUpdatedAt.value
+    consecutiveFailures = 0
     saveToCache()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : `Error en acción ${action}`
+    const raw = err instanceof Error ? err.message : `Error en acción ${action}`
+    error.value = friendlyError(raw)
   } finally {
     actionInFlight.value = null
   }
 }
 
+const nextIntervalMs = (): number => {
+  if (consecutiveFailures === 0) return CACHE_TTL_MS
+  const idx = Math.min(consecutiveFailures - 1, RETRY_DELAYS_MS.length - 1)
+  return RETRY_DELAYS_MS[idx]
+}
+
 const scheduleAutoRefresh = () => {
   if (refreshTimer) clearTimeout(refreshTimer)
   if (!isVisible.value || !hasConfig.value) return
-  const last = lastUpdatedAt.value ?? 0
-  const delay = Math.max(0, CACHE_TTL_MS - (Date.now() - last))
+  const last = lastAttemptedAt.value ?? lastUpdatedAt.value ?? 0
+  const delay = Math.max(0, nextIntervalMs() - (Date.now() - last))
   refreshTimer = setTimeout(async () => {
     if (!isVisible.value) return
     await refresh()
@@ -161,8 +186,8 @@ const handleVisibility = async (visible: boolean) => {
     return
   }
   if (!hasConfig.value) return
-  const last = lastUpdatedAt.value ?? 0
-  if (Date.now() - last >= CACHE_TTL_MS) {
+  const last = lastAttemptedAt.value ?? lastUpdatedAt.value ?? 0
+  if (Date.now() - last >= nextIntervalMs()) {
     await refresh()
   }
   scheduleAutoRefresh()
