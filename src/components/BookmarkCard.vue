@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Bookmark } from '@/types'
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { resolveBookmarkHue } from '@/composables/useColorHue'
 import { useCategoriesStore } from '@/stores/categories'
 import { useEditDrawerStore } from '@/stores/editDrawer'
@@ -97,6 +97,57 @@ const stop = (event: Event) => {
 }
 
 const imageStyle = computed(() => buildImageStyle(props.bookmark))
+
+const alternateUrls = computed(() => props.bookmark.alternateUrls ?? [])
+const hasAlternateUrls = computed(() => alternateUrls.value.length > 0)
+const showAlternateUrls = ref(false)
+const altBtnRef = ref<HTMLButtonElement | null>(null)
+const altPopoverRef = ref<HTMLElement | null>(null)
+const altPopoverPos = ref<{ top: number; left: number } | null>(null)
+
+const updateAltPopoverPos = () => {
+  const btn = altBtnRef.value
+  if (!btn) return
+  const rect = btn.getBoundingClientRect()
+  altPopoverPos.value = { top: rect.bottom + 4, left: rect.left }
+}
+
+const closeAlternateUrls = () => {
+  showAlternateUrls.value = false
+}
+
+const toggleAlternateUrls = (event: MouseEvent) => {
+  event.preventDefault()
+  event.stopPropagation()
+  if (!showAlternateUrls.value) updateAltPopoverPos()
+  showAlternateUrls.value = !showAlternateUrls.value
+}
+
+const handleDocClick = (event: MouseEvent) => {
+  if (!showAlternateUrls.value) return
+  const target = event.target as Node
+  if (altBtnRef.value?.contains(target)) return
+  if (altPopoverRef.value?.contains(target)) return
+  showAlternateUrls.value = false
+}
+
+watch(showAlternateUrls, (open) => {
+  if (open) {
+    document.addEventListener('click', handleDocClick)
+    window.addEventListener('scroll', updateAltPopoverPos, true)
+    window.addEventListener('resize', updateAltPopoverPos)
+  } else {
+    document.removeEventListener('click', handleDocClick)
+    window.removeEventListener('scroll', updateAltPopoverPos, true)
+    window.removeEventListener('resize', updateAltPopoverPos)
+  }
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleDocClick)
+  window.removeEventListener('scroll', updateAltPopoverPos, true)
+  window.removeEventListener('resize', updateAltPopoverPos)
+})
 </script>
 
 <template>
@@ -178,7 +229,58 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
         class="card-widgets"
         @click="stop"
       />
+
+      <div v-if="hasAlternateUrls" class="card-alt-urls" @click="stop">
+        <button
+          ref="altBtnRef"
+          type="button"
+          class="card-alt-btn"
+          :class="{ open: showAlternateUrls }"
+          :aria-expanded="showAlternateUrls"
+          :title="`${alternateUrls.length} URL${alternateUrls.length === 1 ? '' : 's'} alternativa${alternateUrls.length === 1 ? '' : 's'}`"
+          aria-label="more urls"
+          @click="toggleAlternateUrls"
+        >
+          <svg
+            width="11"
+            height="11"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 1 0-7.07-7.07l-1.72 1.71" />
+            <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 1 0 7.07 7.07l1.72-1.71" />
+          </svg>
+          <span>more urls</span>
+          <span class="card-alt-count">{{ alternateUrls.length }}</span>
+        </button>
+      </div>
     </div>
+
+    <Teleport to="body">
+      <ul
+        v-if="showAlternateUrls && hasAlternateUrls && altPopoverPos"
+        ref="altPopoverRef"
+        class="card-alt-list"
+        role="menu"
+        :style="{ top: `${altPopoverPos.top}px`, left: `${altPopoverPos.left}px` }"
+      >
+        <li v-for="(item, i) in alternateUrls" :key="i">
+          <a
+            :href="item.url"
+            :title="item.url"
+            target="_blank"
+            rel="noopener noreferrer"
+            @click="closeAlternateUrls"
+          >
+            {{ item.title || item.url }}
+          </a>
+        </li>
+      </ul>
+    </Teleport>
 
     <a
       class="card-edit"
@@ -418,5 +520,85 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
 .card-widgets {
   margin-top: 7px;
   pointer-events: auto;
+}
+
+.card-alt-urls {
+  margin-top: 6px;
+  position: relative;
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+}
+.card-alt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 5px;
+  border: 0.5px solid var(--border, rgba(28, 26, 20, 0.12));
+  background: var(--bg-soft, #f3f1ec);
+  color: var(--fg-soft, #7a7468);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+}
+.card-alt-btn:hover,
+.card-alt-btn.open {
+  background: var(--bg-elev, #ffffff);
+  color: var(--fg, #1c1a14);
+  border-color: var(--border-strong, rgba(28, 26, 20, 0.2));
+}
+.card-alt-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 4px;
+  border-radius: 7px;
+  background: oklch(0.65 0.16 var(--c) / 0.18);
+  color: oklch(0.40 0.14 var(--c));
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 1;
+}
+.card.no-color .card-alt-count {
+  background: var(--bg-softer, #ecebe5);
+  color: var(--fg-mid, #4a463c);
+}
+.card-alt-list {
+  position: fixed;
+  list-style: none;
+  padding: 4px;
+  margin: 0;
+  background: var(--bg-elev, #ffffff);
+  border: 0.5px solid var(--border-strong, rgba(28, 26, 20, 0.16));
+  border-radius: 8px;
+  box-shadow: var(--shadow-md, 0 4px 14px rgba(28, 26, 20, 0.12));
+  min-width: 180px;
+  max-width: 260px;
+  z-index: 1000;
+}
+.card-alt-list li {
+  margin: 0;
+}
+.card-alt-list a {
+  display: block;
+  padding: 5px 9px;
+  border-radius: 5px;
+  font-size: 12px;
+  color: var(--fg, #1c1a14);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card-alt-list a:hover {
+  background: var(--bg-soft, #f3f1ec);
 }
 </style>

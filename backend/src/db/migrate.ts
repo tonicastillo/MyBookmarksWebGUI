@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS bookmarks (
   image_bg_color        TEXT,
   image_bg_color2       TEXT,
   resboard              TEXT,
+  alternate_urls        TEXT,
   user_id               TEXT REFERENCES users(id) ON DELETE CASCADE,
   created_at            TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
@@ -349,6 +350,14 @@ const MIGRATIONS: Migration[] = [
 
       if (credByUserAndKey.size > 0) {
         console.log(`[migrate] v7: migradas ${rows.length} widgets unraid a ${credByUserAndKey.size} credenciales`)
+      }
+    }
+  },
+  {
+    version: 8,
+    up: (database) => {
+      if (!hasColumn(database, 'bookmarks', 'alternate_urls')) {
+        database.exec(`ALTER TABLE bookmarks ADD COLUMN alternate_urls TEXT`)
       }
     }
   }

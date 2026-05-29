@@ -1,4 +1,4 @@
-import type { Bookmark } from "@/types";
+import type { AlternateUrl, Bookmark } from "@/types";
 import { fetchImageAsDataUrl } from "./useBookmarkImageTransfer";
 
 export interface BookmarkDuplicateData {
@@ -13,6 +13,7 @@ export interface BookmarkDuplicateData {
   searchPlaceholder: string;
   searchUrlTemplate: string;
   tags: string[];
+  alternateUrls: AlternateUrl[];
   imageScale: number;
   imageBgColor: string | null;
   imageBgColor2: string | null;
@@ -61,6 +62,7 @@ export const buildDuplicatePayload = async (
     searchPlaceholder: bookmark.searchPlaceholder ?? "",
     searchUrlTemplate: bookmark.searchUrlTemplate ?? "",
     tags: [...bookmark.tags],
+    alternateUrls: (bookmark.alternateUrls ?? []).map((a) => ({ ...a })),
     imageScale: bookmark.imageScale ?? 1,
     imageBgColor: bookmark.imageBgColor ?? null,
     imageBgColor2: bookmark.imageBgColor2 ?? null,

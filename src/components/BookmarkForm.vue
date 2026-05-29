@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch, watchEffect } from "vue";
-import type { Bookmark } from "@/types";
+import type { AlternateUrl, Bookmark } from "@/types";
 import { useCategoriesStore } from "@/stores/categories";
 import { useBookmarksStore } from "@/stores/bookmarks";
 import type { BookmarkInput } from "@/api/notion";
@@ -65,6 +65,21 @@ const searchUrlTemplate = ref(
 );
 const tags = ref<string[]>([...(props.bookmark?.tags ?? p?.tags ?? [])]);
 const tagInput = ref("");
+
+const cloneAlternateUrls = (list: AlternateUrl[] | undefined): AlternateUrl[] =>
+  (list ?? []).map((a) => ({ title: a.title ?? "", url: a.url ?? "" }));
+
+const alternateUrls = ref<AlternateUrl[]>(
+  cloneAlternateUrls(props.bookmark?.alternateUrls ?? p?.alternateUrls),
+);
+
+const addAlternateUrl = () => {
+  alternateUrls.value.push({ title: "", url: "" });
+};
+
+const removeAlternateUrl = (index: number) => {
+  alternateUrls.value.splice(index, 1);
+};
 
 const imageFile = ref<File | null>(null);
 const imagePreview = ref<string | null>(null);
@@ -223,6 +238,10 @@ const buildSnapshot = () =>
     imageBgColor2: imageBgColor2.value,
     useGradient: useGradient.value,
     tags: [...tags.value],
+    alternateUrls: alternateUrls.value.map((a) => ({
+      title: a.title,
+      url: a.url,
+    })),
     imageFileName: imageFile.value?.name ?? null,
     imageFileSize: imageFile.value?.size ?? null,
     removeImage: removeImage.value,
@@ -504,6 +523,9 @@ const handleSubmit = (event: Event) => {
     imageBgColor: imageBgColor.value || null,
     imageBgColor2: useGradient.value ? imageBgColor2.value || null : null,
     tags: tags.value,
+    alternateUrls: alternateUrls.value
+      .map((a) => ({ title: a.title.trim(), url: a.url.trim() }))
+      .filter((a) => a.url.length > 0),
   };
   emit("submit", {
     input,
@@ -532,6 +554,7 @@ watch(
     imageBgColor2.value = b.imageBgColor2 ?? null;
     useGradient.value = Boolean(b.imageBgColor2);
     tags.value = [...b.tags];
+    alternateUrls.value = cloneAlternateUrls(b.alternateUrls);
     imageFile.value = null;
     imagePreview.value = null;
     removeImage.value = false;
@@ -830,6 +853,48 @@ watch(
           <span class="label">URL</span>
           <input v-model="url" type="url" placeholder="https://…" />
         </label>
+
+        <div class="field">
+          <div class="alt-urls-header">
+            <span class="label">URLs alternativas</span>
+            <button
+              type="button"
+              class="alt-url-add"
+              :title="'Añadir URL alternativa'"
+              aria-label="Añadir URL alternativa"
+              @click="addAlternateUrl"
+            >
+              +
+            </button>
+          </div>
+          <div
+            v-for="(item, index) in alternateUrls"
+            :key="index"
+            class="alt-url-row"
+          >
+            <input
+              v-model="item.title"
+              type="text"
+              placeholder="Título"
+              class="alt-url-title"
+            />
+            <input
+              v-model="item.url"
+              type="url"
+              placeholder="https://…"
+              class="alt-url-url"
+            />
+            <button
+              type="button"
+              class="alt-url-remove"
+              :title="'Quitar'"
+              aria-label="Quitar URL alternativa"
+              @click="removeAlternateUrl(index)"
+            >
+              ×
+            </button>
+          </div>
+        </div>
 
         <label class="field">
           <span class="label">Subtítulo</span>
@@ -1279,6 +1344,61 @@ watch(
 .tag-suggestion:hover {
   background: var(--bg-soft, #f3f1ec);
   color: var(--fg, #1c1a14);
+}
+
+.alt-urls-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.alt-url-add,
+.alt-url-remove {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  border: 0.5px solid var(--border, rgba(28, 26, 20, 0.16));
+  background: var(--bg-elev, #ffffff);
+  color: var(--fg, #1c1a14);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+  flex-shrink: 0;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+.alt-url-add:hover,
+.alt-url-remove:hover {
+  background: var(--bg-softer, #ecebe5);
+  border-color: var(--border-strong, rgba(28, 26, 20, 0.24));
+}
+.alt-url-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+.alt-url-row + .alt-url-row {
+  margin-top: 6px;
+}
+.alt-url-row input {
+  height: 30px;
+  padding: 0 9px;
+  font: inherit;
+  font-size: 12.5px;
+  background: var(--bg-elev, #ffffff);
+  border: 0.5px solid var(--border, rgba(28, 26, 20, 0.16));
+  border-radius: 7px;
+  color: var(--fg, #1c1a14);
+  outline: none;
+  transition: border-color 120ms ease;
+  min-width: 0;
+}
+.alt-url-row input:focus {
+  border-color: var(--fg-mid, #4a463c);
 }
 
 .advanced {

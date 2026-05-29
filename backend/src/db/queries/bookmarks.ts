@@ -1,5 +1,5 @@
 import db from '../connection.js'
-import type { Bookmark, Widget } from '../../types/index.js'
+import type { AlternateUrl, Bookmark, Widget } from '../../types/index.js'
 import { getAllWidgetsByBookmark, getWidgetsByBookmark } from './widgets.js'
 
 interface BookmarkRow {
@@ -20,6 +20,7 @@ interface BookmarkRow {
   image_bg_color: string | null
   image_bg_color2: string | null
   resboard: string | null
+  alternate_urls: string | null
   updated_at: string | null
 }
 
@@ -54,6 +55,26 @@ const parseResboard = (raw: string | null): Record<string, unknown> | undefined 
   }
 }
 
+const parseAlternateUrls = (raw: string | null): AlternateUrl[] | undefined => {
+  if (!raw) return undefined
+  try {
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return undefined
+    const list = parsed
+      .filter((item): item is { title?: unknown; url?: unknown } =>
+        item != null && typeof item === 'object' && !Array.isArray(item),
+      )
+      .map((item) => ({
+        title: typeof item.title === 'string' ? item.title : '',
+        url: typeof item.url === 'string' ? item.url : '',
+      }))
+      .filter((item) => item.url.trim().length > 0)
+    return list.length > 0 ? list : undefined
+  } catch {
+    return undefined
+  }
+}
+
 const rowToBookmark = (
   row: BookmarkRow,
   tagsByBookmark: Map<string, string[]>,
@@ -76,6 +97,7 @@ const rowToBookmark = (
   imageBgColor: row.image_bg_color ?? undefined,
   imageBgColor2: row.image_bg_color2 ?? undefined,
   resboard: parseResboard(row.resboard),
+  alternateUrls: parseAlternateUrls(row.alternate_urls),
   widgets: widgetsByBookmark.get(row.id) ?? []
 })
 
@@ -134,10 +156,17 @@ export interface BookmarkInput {
   imageBgColor2?: string | null
   tags?: string[]
   resboard?: Record<string, unknown> | null
+  alternateUrls?: AlternateUrl[] | null
 }
 
 const serializeResboard = (value: BookmarkInput['resboard']): string | null => {
   if (value === null || value === undefined) return null
+  return JSON.stringify(value)
+}
+
+const serializeAlternateUrls = (value: BookmarkInput['alternateUrls']): string | null => {
+  if (value === null || value === undefined) return null
+  if (!Array.isArray(value) || value.length === 0) return null
   return JSON.stringify(value)
 }
 
@@ -163,12 +192,14 @@ export const insertBookmark = (id: string, input: BookmarkInput, userId: string)
         id, name, url, subtitle, category_id, parent_bookmark_id,
         visible_at_start, is_mega_card, color,
         search_placeholder, search_url_template, image_url,
-        image_scale, image_bg_color, image_bg_color2, resboard, user_id
+        image_scale, image_bg_color, image_bg_color2, resboard,
+        alternate_urls, user_id
       ) VALUES (
         @id, @name, @url, @subtitle, @categoryId, @parentBookmarkId,
         @visibleAtStart, @isMegaCard, @color,
         @searchPlaceholder, @searchUrlTemplate, @imageUrl,
-        @imageScale, @imageBgColor, @imageBgColor2, @resboard, @userId
+        @imageScale, @imageBgColor, @imageBgColor2, @resboard,
+        @alternateUrls, @userId
       )
     `).run({
       id,
@@ -187,6 +218,7 @@ export const insertBookmark = (id: string, input: BookmarkInput, userId: string)
       imageBgColor: input.imageBgColor ?? null,
       imageBgColor2: input.imageBgColor2 ?? null,
       resboard: serializeResboard(input.resboard),
+      alternateUrls: serializeAlternateUrls(input.alternateUrls),
       userId
     })
 
@@ -224,6 +256,7 @@ export const updateBookmark = (id: string, input: Partial<BookmarkInput>, userId
   if (input.imageBgColor !== undefined) setField('image_bg_color', 'imageBgColor', input.imageBgColor ?? null)
   if (input.imageBgColor2 !== undefined) setField('image_bg_color2', 'imageBgColor2', input.imageBgColor2 ?? null)
   if (input.resboard !== undefined) setField('resboard', 'resboard', serializeResboard(input.resboard))
+  if (input.alternateUrls !== undefined) setField('alternate_urls', 'alternateUrls', serializeAlternateUrls(input.alternateUrls))
 
   const tx = db.transaction(() => {
     if (fields.length > 0) {

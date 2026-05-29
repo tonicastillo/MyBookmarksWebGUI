@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Bookmark } from '@/types'
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { resolveBookmarkHue } from '@/composables/useColorHue'
 import { useCategoriesStore } from '@/stores/categories'
 import { useEditDrawerStore } from '@/stores/editDrawer'
@@ -30,7 +30,58 @@ const hue = computed(() => {
 const hasUrl = computed(() => Boolean(props.bookmark.url))
 const hasSearch = computed(() => Boolean(props.bookmark.searchUrlTemplate))
 const hasWidgets = computed(() => Boolean(props.bookmark.widgets && props.bookmark.widgets.length > 0))
-const isComplex = computed(() => hasSearch.value || hasWidgets.value)
+const alternateUrls = computed(() => props.bookmark.alternateUrls ?? [])
+const hasAlternateUrls = computed(() => alternateUrls.value.length > 0)
+const isComplex = computed(() => hasSearch.value || hasWidgets.value || hasAlternateUrls.value)
+
+const showAlternateUrls = ref(false)
+const altBtnRef = ref<HTMLButtonElement | null>(null)
+const altPopoverRef = ref<HTMLElement | null>(null)
+const altPopoverPos = ref<{ top: number; left: number } | null>(null)
+
+const updateAltPopoverPos = () => {
+  const btn = altBtnRef.value
+  if (!btn) return
+  const rect = btn.getBoundingClientRect()
+  altPopoverPos.value = { top: rect.bottom + 4, left: rect.left }
+}
+
+const closeAlternateUrls = () => {
+  showAlternateUrls.value = false
+}
+
+const toggleAlternateUrls = (event: MouseEvent) => {
+  event.preventDefault()
+  event.stopPropagation()
+  if (!showAlternateUrls.value) updateAltPopoverPos()
+  showAlternateUrls.value = !showAlternateUrls.value
+}
+
+const handleDocClick = (event: MouseEvent) => {
+  if (!showAlternateUrls.value) return
+  const target = event.target as Node
+  if (altBtnRef.value?.contains(target)) return
+  if (altPopoverRef.value?.contains(target)) return
+  showAlternateUrls.value = false
+}
+
+watch(showAlternateUrls, (open) => {
+  if (open) {
+    document.addEventListener('click', handleDocClick)
+    window.addEventListener('scroll', updateAltPopoverPos, true)
+    window.addEventListener('resize', updateAltPopoverPos)
+  } else {
+    document.removeEventListener('click', handleDocClick)
+    window.removeEventListener('scroll', updateAltPopoverPos, true)
+    window.removeEventListener('resize', updateAltPopoverPos)
+  }
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleDocClick)
+  window.removeEventListener('scroll', updateAltPopoverPos, true)
+  window.removeEventListener('resize', updateAltPopoverPos)
+})
 
 const initials = computed(() => {
   const trimmed = props.bookmark.name.trim()
@@ -145,6 +196,25 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
       :widgets="bookmark.widgets"
       @click="stop"
     />
+    <div v-if="hasAlternateUrls" class="mini-alt-urls" @click="stop">
+      <button
+        ref="altBtnRef"
+        type="button"
+        class="mini-alt-btn"
+        :class="{ open: showAlternateUrls }"
+        :aria-expanded="showAlternateUrls"
+        :title="`${alternateUrls.length} URL${alternateUrls.length === 1 ? '' : 's'} alternativa${alternateUrls.length === 1 ? '' : 's'}`"
+        aria-label="more urls"
+        @click="toggleAlternateUrls"
+      >
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 1 0-7.07-7.07l-1.72 1.71" />
+          <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 1 0 7.07 7.07l1.72-1.71" />
+        </svg>
+        <span>more urls</span>
+        <span class="mini-alt-count">{{ alternateUrls.length }}</span>
+      </button>
+    </div>
   </div>
 
   <div
@@ -187,6 +257,28 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
       </svg>
     </a>
   </div>
+
+  <Teleport to="body">
+    <ul
+      v-if="showAlternateUrls && hasAlternateUrls && altPopoverPos"
+      ref="altPopoverRef"
+      class="mini-alt-list"
+      role="menu"
+      :style="{ top: `${altPopoverPos.top}px`, left: `${altPopoverPos.left}px` }"
+    >
+      <li v-for="(item, i) in alternateUrls" :key="i">
+        <a
+          :href="item.url"
+          :title="item.url"
+          target="_blank"
+          rel="noopener noreferrer"
+          @click="closeAlternateUrls"
+        >
+          {{ item.title || item.url }}
+        </a>
+      </li>
+    </ul>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -354,4 +446,79 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
   color: var(--bg, #faf9f7);
   border-color: var(--fg, #1c1a14);
 }
+
+.mini-alt-urls {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  z-index: 2;
+}
+.mini-alt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 5px;
+  border: 0.5px solid var(--border, rgba(28, 26, 20, 0.12));
+  background: transparent;
+  color: var(--fg-soft, #7a7468);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+}
+.mini-alt-btn:hover,
+.mini-alt-btn.open {
+  background: var(--bg-elev, #ffffff);
+  color: var(--fg, #1c1a14);
+  border-color: var(--border-strong, rgba(28, 26, 20, 0.2));
+}
+.mini-alt-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 13px;
+  height: 13px;
+  padding: 0 4px;
+  border-radius: 7px;
+  background: oklch(0.65 0.16 var(--c) / 0.18);
+  color: oklch(0.40 0.14 var(--c));
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+}
+.minicard.no-color .mini-alt-count {
+  background: var(--bg-softer, #ecebe5);
+  color: var(--fg-mid, #4a463c);
+}
+.mini-alt-list {
+  position: fixed;
+  list-style: none;
+  padding: 4px;
+  margin: 0;
+  background: var(--bg-elev, #ffffff);
+  border: 0.5px solid var(--border-strong, rgba(28, 26, 20, 0.16));
+  border-radius: 8px;
+  box-shadow: var(--shadow-md, 0 4px 14px rgba(28, 26, 20, 0.12));
+  min-width: 160px;
+  max-width: 240px;
+  z-index: 1000;
+}
+.mini-alt-list li { margin: 0; }
+.mini-alt-list a {
+  display: block;
+  padding: 4px 8px;
+  border-radius: 5px;
+  font-size: 11.5px;
+  color: var(--fg, #1c1a14);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mini-alt-list a:hover { background: var(--bg-soft, #f3f1ec); }
 </style>

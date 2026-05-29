@@ -15,7 +15,7 @@ import {
   getAllTags,
   type BookmarkInput
 } from '../db/queries/bookmarks.js'
-import type { ApiResponse, Bookmark } from '../types/index.js'
+import type { AlternateUrl, ApiResponse, Bookmark } from '../types/index.js'
 
 const router: IRouter = Router()
 
@@ -77,18 +77,40 @@ const validateResboard = (value: unknown): Record<string, unknown> | null | unde
   return value as Record<string, unknown>
 }
 
+const validateAlternateUrls = (value: unknown): AlternateUrl[] | null | undefined => {
+  if (value === undefined) return undefined
+  if (value === null) return null
+  if (!Array.isArray(value)) {
+    throw new Error('alternateUrls debe ser un array o null')
+  }
+  const list: AlternateUrl[] = []
+  for (const item of value) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new Error('cada alternateUrl debe ser un objeto { title, url }')
+    }
+    const obj = item as { title?: unknown; url?: unknown }
+    const url = typeof obj.url === 'string' ? obj.url.trim() : ''
+    if (!url) continue
+    const title = typeof obj.title === 'string' ? obj.title.trim() : ''
+    list.push({ title, url })
+  }
+  return list
+}
+
 const sanitizeBookmarkInput = (input: BookmarkInput): BookmarkInput => {
   const color = validateColor(input.color)
   const resboard = validateResboard(input.resboard)
   const imageScale = validateScale(input.imageScale)
   const imageBgColor = validateBgColor(input.imageBgColor)
   const imageBgColor2 = validateBgColor(input.imageBgColor2)
+  const alternateUrls = validateAlternateUrls(input.alternateUrls)
   const patch: BookmarkInput = { ...input }
   if (color !== undefined) patch.color = color
   if (resboard !== undefined) patch.resboard = resboard
   if (imageScale !== undefined) patch.imageScale = imageScale
   if (imageBgColor !== undefined) patch.imageBgColor = imageBgColor
   if (imageBgColor2 !== undefined) patch.imageBgColor2 = imageBgColor2
+  if (alternateUrls !== undefined) patch.alternateUrls = alternateUrls
   if (patch.isMegaCard === true) patch.parentBookmarkId = null
   return patch
 }

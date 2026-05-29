@@ -6,6 +6,11 @@ export interface Widget {
   config: Record<string, unknown>
 }
 
+export interface AlternateUrl {
+  title: string
+  url: string
+}
+
 export interface Bookmark {
   id: string
   name: string
@@ -24,6 +29,7 @@ export interface Bookmark {
   imageBgColor?: string | null
   imageBgColor2?: string | null
   resboard?: Record<string, unknown> | null
+  alternateUrls?: AlternateUrl[]
   widgets?: Widget[]
 }
 

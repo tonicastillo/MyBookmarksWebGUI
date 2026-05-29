@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { Bookmark, Category, ApiResponse } from '@/types'
+import type { AlternateUrl, Bookmark, Category, ApiResponse } from '@/types'
 
 const api = axios.create({
   baseURL: '/api',
@@ -107,6 +107,7 @@ export interface BookmarkInput {
   imageBgColor2?: string | null
   tags?: string[]
   resboard?: Record<string, unknown> | null
+  alternateUrls?: AlternateUrl[] | null
 }
 
 export interface CategoryInput {

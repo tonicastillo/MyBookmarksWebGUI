@@ -6,6 +6,11 @@ export interface Widget {
   config: Record<string, unknown>
 }
 
+export interface AlternateUrl {
+  title: string
+  url: string
+}
+
 export interface Bookmark {
   id: string
   name: string
@@ -15,6 +20,9 @@ export interface Bookmark {
   categoryId?: string
   visibleAtStart: boolean
   imageUrl?: string
+
+  // URLs alternativas — lista de pares { título, url }.
+  alternateUrls?: AlternateUrl[]
 
   // Marca explícita: este bookmark actúa como padre/contenedor de mega card.
   // Una mega card no puede tener `parentBookmarkId`. Solo bookmarks con
