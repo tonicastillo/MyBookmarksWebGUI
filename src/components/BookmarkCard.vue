@@ -165,72 +165,66 @@ onBeforeUnmount(() => {
       :aria-label="bookmark.name"
     ></a>
 
-    <div class="card-thumb" :style="imageStyle.thumb">
-      <img
-        v-if="bookmark.imageUrl"
-        :src="bookmark.imageUrl"
-        :alt="bookmark.name"
-        loading="lazy"
-        :style="imageStyle.img"
-      />
-      <span v-else class="card-thumb-text">{{ initials }}</span>
-    </div>
-
-    <div class="card-body">
-      <div class="card-title">{{ bookmark.name }}</div>
-
-      <div v-if="bookmark.subtitle || displayUrl" class="card-sub">
-        {{ bookmark.subtitle || displayUrl }}
-      </div>
-
-      <div v-if="bookmark.tags.length > 0" class="card-tags">
-        <button
-          v-for="tag in bookmark.tags.slice(0, 3)"
-          :key="tag"
-          class="card-tag"
-          @click="handleTagClick(tag, $event)"
-        >
-          {{ tag }}
-        </button>
-      </div>
-
-      <form
-        v-if="hasSearch"
-        class="card-search"
-        @submit="handleSearchSubmit"
-        @click="stop"
-      >
-        <input
-          v-model="searchQuery"
-          type="text"
-          :placeholder="bookmark.searchPlaceholder || 'Buscar…'"
-          @click.stop.prevent
+    <div class="card-head">
+      <div class="card-thumb" :style="imageStyle.thumb">
+        <img
+          v-if="bookmark.imageUrl"
+          :src="bookmark.imageUrl"
+          :alt="bookmark.name"
+          loading="lazy"
+          :style="imageStyle.img"
         />
-        <button type="submit" aria-label="Buscar">
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
+        <span v-else class="card-thumb-text">{{ initials }}</span>
+      </div>
+
+      <div class="card-body">
+        <div class="card-title">{{ bookmark.name }}</div>
+
+        <div v-if="bookmark.subtitle || displayUrl" class="card-sub">
+          {{ bookmark.subtitle || displayUrl }}
+        </div>
+
+        <div v-if="bookmark.tags.length > 0" class="card-tags">
+          <button
+            v-for="tag in bookmark.tags.slice(0, 3)"
+            :key="tag"
+            class="card-tag"
+            @click="handleTagClick(tag, $event)"
           >
-            <circle cx="11" cy="11" r="7" />
-            <path d="m21 21-4.3-4.3" />
-          </svg>
-        </button>
-      </form>
+            {{ tag }}
+          </button>
+        </div>
 
-      <WidgetRenderer
-        v-if="bookmark.widgets && bookmark.widgets.length > 0"
-        :widgets="bookmark.widgets"
-        class="card-widgets"
-        @click="stop"
-      />
+        <form
+          v-if="hasSearch"
+          class="card-search"
+          @submit="handleSearchSubmit"
+          @click="stop"
+        >
+          <input
+            v-model="searchQuery"
+            type="text"
+            :placeholder="bookmark.searchPlaceholder || 'Buscar…'"
+            @click.stop.prevent
+          />
+          <button type="submit" aria-label="Buscar">
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+          </button>
+        </form>
 
-      <div v-if="hasAlternateUrls" class="card-alt-urls" @click="stop">
+        <div v-if="hasAlternateUrls" class="card-alt-urls" @click="stop">
         <button
           ref="altBtnRef"
           type="button"
@@ -257,8 +251,16 @@ onBeforeUnmount(() => {
           <span>more urls</span>
           <span class="card-alt-count">{{ alternateUrls.length }}</span>
         </button>
+        </div>
       </div>
     </div>
+
+    <WidgetRenderer
+      v-if="bookmark.widgets && bookmark.widgets.length > 0"
+      :widgets="bookmark.widgets"
+      class="card-widgets"
+      @click="stop"
+    />
 
     <Teleport to="body">
       <ul
@@ -332,14 +334,19 @@ onBeforeUnmount(() => {
   border-radius: 14px;
   padding: 12px 12px 12px 16px;
   display: flex;
-  gap: 12px;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 10px;
   cursor: default;
   transition: box-shadow 160ms ease, transform 160ms ease, border-color 160ms ease;
   position: relative;
   overflow: hidden;
   color: inherit;
-  min-height: 78px;
+}
+.card-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  min-height: 52px;
 }
 .card.has-link { cursor: pointer; }
 .card::before {
@@ -518,7 +525,9 @@ onBeforeUnmount(() => {
 }
 
 .card-widgets {
-  margin-top: 7px;
+  position: relative;
+  z-index: 2;
+  width: 100%;
   pointer-events: auto;
 }
 

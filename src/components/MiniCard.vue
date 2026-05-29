@@ -21,18 +21,21 @@ const props = defineProps<{
   bookmark: Bookmark
 }>()
 
+const emit = defineEmits<{
+  'tag-click': [tag: string]
+}>()
+
 const hue = computed(() => {
   const cat = props.bookmark.categoryId
     ? categoriesStore.getById(props.bookmark.categoryId)
     : null
   return resolveBookmarkHue(props.bookmark, cat?.color)
 })
+
 const hasUrl = computed(() => Boolean(props.bookmark.url))
 const hasSearch = computed(() => Boolean(props.bookmark.searchUrlTemplate))
-const hasWidgets = computed(() => Boolean(props.bookmark.widgets && props.bookmark.widgets.length > 0))
 const alternateUrls = computed(() => props.bookmark.alternateUrls ?? [])
 const hasAlternateUrls = computed(() => alternateUrls.value.length > 0)
-const isComplex = computed(() => hasSearch.value || hasWidgets.value || hasAlternateUrls.value)
 
 const showAlternateUrls = ref(false)
 const altBtnRef = ref<HTMLButtonElement | null>(null)
@@ -91,8 +94,7 @@ const initials = computed(() => {
   return trimmed.slice(0, 2).toUpperCase()
 })
 
-const displaySub = computed(() => {
-  if (props.bookmark.subtitle) return props.bookmark.subtitle
+const displayUrl = computed(() => {
   if (!props.bookmark.url) return ''
   try {
     return new URL(props.bookmark.url).hostname.replace(/^www\./, '')
@@ -118,6 +120,12 @@ const handleEditClick = async (event: MouseEvent) => {
   editDrawer.open({ bookmarkId: props.bookmark.id })
 }
 
+const handleTagClick = (tag: string, event: Event) => {
+  event.preventDefault()
+  event.stopPropagation()
+  emit('tag-click', tag)
+}
+
 const searchQuery = ref('')
 const handleSearchSubmit = (event: Event) => {
   event.preventDefault()
@@ -137,121 +145,111 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
 
 <template>
   <div
-    v-if="isComplex"
-    class="minicard has-search"
-    :class="{ 'no-color': hue === null }"
-    :style="hue !== null ? { '--c': hue } : {}"
-  >
-    <div class="minicard-row" :class="{ 'has-link': hasUrl }">
-      <a
-        v-if="hasUrl"
-        class="minicard-link"
-        :href="bookmark.url"
-        target="_blank"
-        rel="noopener noreferrer"
-        :aria-label="bookmark.name"
-      ></a>
-      <div class="minicard-thumb" :style="imageStyle.thumb">
-        <img v-if="bookmark.imageUrl" :src="bookmark.imageUrl" :alt="bookmark.name" loading="lazy" :style="imageStyle.img" />
-        <span v-else>{{ initials }}</span>
-      </div>
-      <div class="minicard-body">
-        <div class="minicard-title">{{ bookmark.name }}</div>
-        <div v-if="displaySub" class="minicard-sub">{{ displaySub }}</div>
-      </div>
-      <a
-        class="minicard-edit"
-        :class="{ 'is-duplicate': isAltPressed }"
-        :href="editHref"
-        :aria-label="isAltPressed ? 'Duplicar' : 'Editar'"
-        :title="isAltPressed ? 'Duplicar bookmark' : 'Editar (Alt para duplicar, Cmd+Click para nueva pestaña)'"
-        @click="handleEditClick"
-      >
-        <svg v-if="!isAltPressed" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 20h9" />
-          <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4Z" />
-        </svg>
-        <svg v-else width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-        </svg>
-      </a>
-    </div>
-    <form v-if="hasSearch" class="card-search" @submit="handleSearchSubmit" @click="stop">
-      <input
-        v-model="searchQuery"
-        type="text"
-        :placeholder="bookmark.searchPlaceholder || 'Buscar…'"
-        @click.stop
-      />
-      <button type="submit" aria-label="Buscar">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="11" cy="11" r="7" />
-          <path d="m21 21-4.3-4.3" />
-        </svg>
-      </button>
-    </form>
-    <WidgetRenderer
-      v-if="hasWidgets"
-      :widgets="bookmark.widgets"
-      @click="stop"
-    />
-    <div v-if="hasAlternateUrls" class="mini-alt-urls" @click="stop">
-      <button
-        ref="altBtnRef"
-        type="button"
-        class="mini-alt-btn"
-        :class="{ open: showAlternateUrls }"
-        :aria-expanded="showAlternateUrls"
-        :title="`${alternateUrls.length} URL${alternateUrls.length === 1 ? '' : 's'} alternativa${alternateUrls.length === 1 ? '' : 's'}`"
-        aria-label="more urls"
-        @click="toggleAlternateUrls"
-      >
-        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 1 0-7.07-7.07l-1.72 1.71" />
-          <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 1 0 7.07 7.07l1.72-1.71" />
-        </svg>
-        <span>more urls</span>
-        <span class="mini-alt-count">{{ alternateUrls.length }}</span>
-      </button>
-    </div>
-  </div>
-
-  <div
-    v-else
-    class="minicard"
+    class="card"
     :class="{ 'no-color': hue === null, 'has-link': hasUrl }"
     :style="hue !== null ? { '--c': hue } : {}"
   >
     <a
       v-if="hasUrl"
-      class="minicard-link"
+      class="card-link"
       :href="bookmark.url"
       target="_blank"
       rel="noopener noreferrer"
       :aria-label="bookmark.name"
     ></a>
-    <div class="minicard-thumb" :style="imageStyle.thumb">
-      <img v-if="bookmark.imageUrl" :src="bookmark.imageUrl" :alt="bookmark.name" loading="lazy" :style="imageStyle.img" />
-      <span v-else>{{ initials }}</span>
+
+    <div class="card-head">
+      <div class="card-thumb" :style="imageStyle.thumb">
+        <img
+          v-if="bookmark.imageUrl"
+          :src="bookmark.imageUrl"
+          :alt="bookmark.name"
+          loading="lazy"
+          :style="imageStyle.img"
+        />
+        <span v-else class="card-thumb-text">{{ initials }}</span>
+      </div>
+
+      <div class="card-body">
+        <div class="card-title">{{ bookmark.name }}</div>
+
+        <div v-if="bookmark.subtitle || displayUrl" class="card-sub">
+          {{ bookmark.subtitle || displayUrl }}
+        </div>
+
+        <div v-if="bookmark.tags.length > 0" class="card-tags">
+          <button
+            v-for="tag in bookmark.tags.slice(0, 3)"
+            :key="tag"
+            class="card-tag"
+            @click="handleTagClick(tag, $event)"
+          >
+            {{ tag }}
+          </button>
+        </div>
+
+        <form
+          v-if="hasSearch"
+          class="card-search"
+          @submit="handleSearchSubmit"
+          @click="stop"
+        >
+          <input
+            v-model="searchQuery"
+            type="text"
+            :placeholder="bookmark.searchPlaceholder || 'Buscar…'"
+            @click.stop.prevent
+          />
+          <button type="submit" aria-label="Buscar">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+          </button>
+        </form>
+
+        <div v-if="hasAlternateUrls" class="card-alt-urls" @click="stop">
+          <button
+            ref="altBtnRef"
+            type="button"
+            class="card-alt-btn"
+            :class="{ open: showAlternateUrls }"
+            :aria-expanded="showAlternateUrls"
+            :title="`${alternateUrls.length} URL${alternateUrls.length === 1 ? '' : 's'} alternativa${alternateUrls.length === 1 ? '' : 's'}`"
+            aria-label="more urls"
+            @click="toggleAlternateUrls"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 1 0-7.07-7.07l-1.72 1.71" />
+              <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 1 0 7.07 7.07l1.72-1.71" />
+            </svg>
+            <span>more urls</span>
+            <span class="card-alt-count">{{ alternateUrls.length }}</span>
+          </button>
+        </div>
+      </div>
     </div>
-    <div class="minicard-body">
-      <div class="minicard-title">{{ bookmark.name }}</div>
-      <div v-if="displaySub" class="minicard-sub">{{ displaySub }}</div>
-    </div>
+
+    <WidgetRenderer
+      v-if="bookmark.widgets && bookmark.widgets.length > 0"
+      :widgets="bookmark.widgets"
+      class="card-widgets"
+      @click="stop"
+    />
+
     <a
-      class="minicard-edit"
+      class="card-edit"
       :class="{ 'is-duplicate': isAltPressed }"
       :href="editHref"
       :aria-label="isAltPressed ? 'Duplicar' : 'Editar'"
       :title="isAltPressed ? 'Duplicar bookmark' : 'Editar (Alt para duplicar, Cmd+Click para nueva pestaña)'"
       @click="handleEditClick"
     >
-      <svg v-if="!isAltPressed" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <svg v-if="!isAltPressed" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M12 20h9" />
         <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4Z" />
       </svg>
-      <svg v-else width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <svg v-else width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
       </svg>
@@ -262,7 +260,7 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
     <ul
       v-if="showAlternateUrls && hasAlternateUrls && altPopoverPos"
       ref="altPopoverRef"
-      class="mini-alt-list"
+      class="card-alt-list"
       role="menu"
       :style="{ top: `${altPopoverPos.top}px`, left: `${altPopoverPos.left}px` }"
     >
@@ -282,39 +280,54 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
 </template>
 
 <style scoped>
-.minicard {
+.card {
   --c: 220;
+  background: var(--bg-elev, #ffffff);
+  border: 0.5px solid var(--border, rgba(28, 26, 20, 0.08));
+  border-radius: 14px;
+  padding: 12px 12px 12px 16px;
   display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 7px 8px 7px 11px;
-  border-radius: 9px;
-  color: var(--fg, #1c1a14);
+  flex-direction: column;
+  gap: 10px;
   cursor: default;
+  transition: box-shadow 160ms ease, transform 160ms ease, border-color 160ms ease;
   position: relative;
-  transition: background 120ms ease;
-  min-width: 0;
   overflow: hidden;
-  background: transparent;
+  color: inherit;
 }
-.minicard.has-link { cursor: pointer; }
-.minicard::before {
+.card.has-link { cursor: pointer; }
+.card::before {
   content: '';
   position: absolute;
-  left: 3px;
-  top: 9px;
-  bottom: 9px;
-  width: 3px;
-  border-radius: 2px;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
   background: oklch(0.65 0.16 var(--c));
-  transition: top 120ms ease, bottom 120ms ease;
+  transition: width 160ms ease;
 }
-.minicard:hover { background: var(--bg-soft, #f3f1ec); }
-.minicard:hover::before { top: 6px; bottom: 6px; }
-.minicard.no-color::before { display: none; }
-.minicard.no-color { padding-left: 8px; }
+.card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 60%, oklch(0.92 0.06 var(--c) / 0) 100%);
+  pointer-events: none;
+  transition: background 200ms ease;
+}
+.card:hover {
+  border-color: var(--border-strong, rgba(28, 26, 20, 0.16));
+  box-shadow: var(--shadow-md, 0 1px 3px rgba(28, 26, 20, 0.06), 0 8px 24px rgba(28, 26, 20, 0.05));
+  transform: translateY(-1px);
+}
+.card:hover::before { width: 5px; }
+.card:hover::after {
+  background: linear-gradient(180deg, transparent 50%, oklch(0.92 0.10 var(--c) / 0.28) 100%);
+}
+.card.no-color::before,
+.card.no-color::after { display: none; }
+.card.no-color { padding-left: 12px; }
 
-.minicard-link {
+.card-link {
   position: absolute;
   inset: 0;
   z-index: 1;
@@ -322,102 +335,120 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
   text-decoration: none;
 }
 
-.minicard-thumb {
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
+.card-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  min-height: 52px;
+}
+
+.card-thumb {
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
   flex-shrink: 0;
   display: grid;
   place-items: center;
   font-weight: 600;
-  font-size: 11px;
+  font-size: 16px;
+  letter-spacing: -0.02em;
   color: var(--fg, #1c1a14);
-  background: var(--bg, #faf9f7);
+  background: var(--bg-soft, #f3f1ec);
   border: 0.5px solid var(--border, rgba(28, 26, 20, 0.08));
+  position: relative;
   overflow: hidden;
   pointer-events: none;
-  position: relative;
-  z-index: 2;
 }
-.minicard-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.minicard-body {
-  min-width: 0;
+.card-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.card-thumb-text { position: relative; z-index: 1; }
+
+.card-body {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   position: relative;
   z-index: 2;
   pointer-events: none;
 }
-.minicard-title {
-  font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.2;
+.card-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
   color: var(--fg, #1c1a14);
-}
-.minicard-sub {
-  font-size: 10.5px;
-  color: var(--fg-faint, #a8a294);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   line-height: 1.3;
 }
-.minicard-edit {
-  width: 18px;
-  height: 18px;
+.card-sub {
+  font-size: 11.5px;
+  color: var(--fg-faint, #a8a294);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+}
+
+.card-tags {
+  display: flex;
+  gap: 4px;
+  margin-top: 5px;
+  flex-wrap: wrap;
+  pointer-events: auto;
+}
+.card-tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-soft, #f3f1ec);
+  color: var(--fg-soft, #7a7468);
+  font-weight: 500;
+  border: 0;
+  cursor: pointer;
+}
+.card-tag:hover { background: var(--bg-softer, #ecebe5); color: var(--fg, #1c1a14); }
+
+.card-edit {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
   display: grid;
   place-items: center;
-  border-radius: 4px;
+  border-radius: 6px;
   background: transparent;
   border: 0;
   color: var(--fg-faint, #a8a294);
   cursor: pointer;
   opacity: 0;
-  flex-shrink: 0;
-  position: relative;
+  transition: opacity 120ms ease, background 120ms ease;
   z-index: 3;
   text-decoration: none;
 }
-.minicard:hover .minicard-edit,
-.minicard.has-search .minicard-row:hover .minicard-edit { opacity: 1; }
-.minicard-edit:hover { background: var(--bg-softer, #ecebe5); color: var(--fg, #1c1a14); }
-.minicard-edit:focus-visible { opacity: 1; outline: 2px solid var(--fg, #1c1a14); outline-offset: 2px; }
-
-.minicard.has-search {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 5px;
-  padding: 8px;
-  background: transparent;
-  cursor: default;
-}
-.minicard.has-search .minicard-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: inherit;
-  border-radius: 6px;
-  padding: 2px;
-  position: relative;
-  cursor: default;
-}
-.minicard.has-search .minicard-row.has-link { cursor: pointer; }
-.minicard.has-search .minicard-row:hover { background: var(--bg-soft, #f3f1ec); }
+.card:hover .card-edit { opacity: 1; }
+.card-edit:hover { background: var(--bg-soft, #f3f1ec); color: var(--fg, #1c1a14); }
+.card-edit:focus-visible { opacity: 1; outline: 2px solid var(--fg, #1c1a14); outline-offset: 2px; }
 
 .card-search {
   display: flex;
   gap: 4px;
-  position: relative;
-  z-index: 2;
+  margin-top: 7px;
+  pointer-events: auto;
 }
 .card-search input {
   flex: 1;
-  height: 22px;
+  height: 24px;
   padding: 0 8px;
   font: inherit;
-  font-size: 11px;
+  font-size: 11.5px;
   border-radius: 6px;
   border: 0.5px solid var(--border, rgba(28, 26, 20, 0.08));
   background: var(--bg, #faf9f7);
@@ -430,8 +461,8 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
   background: var(--bg-elev, #ffffff);
 }
 .card-search button {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 6px;
   border: 0.5px solid var(--border, rgba(28, 26, 20, 0.08));
   background: var(--bg-soft, #f3f1ec);
@@ -447,55 +478,60 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
   border-color: var(--fg, #1c1a14);
 }
 
-.mini-alt-urls {
+.card-widgets {
   position: relative;
+  z-index: 2;
+  width: 100%;
+  pointer-events: auto;
+}
+
+.card-alt-urls {
+  margin-top: 6px;
+  position: relative;
+  pointer-events: auto;
   display: flex;
   align-items: flex-start;
-  z-index: 2;
 }
-.mini-alt-btn {
+.card-alt-btn {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  height: 18px;
-  padding: 0 6px;
+  gap: 4px;
+  height: 20px;
+  padding: 0 7px;
   border-radius: 5px;
   border: 0.5px solid var(--border, rgba(28, 26, 20, 0.12));
-  background: transparent;
+  background: var(--bg-soft, #f3f1ec);
   color: var(--fg-soft, #7a7468);
   font: inherit;
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 500;
   cursor: pointer;
-  transition:
-    background 120ms ease,
-    color 120ms ease,
-    border-color 120ms ease;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
 }
-.mini-alt-btn:hover,
-.mini-alt-btn.open {
+.card-alt-btn:hover,
+.card-alt-btn.open {
   background: var(--bg-elev, #ffffff);
   color: var(--fg, #1c1a14);
   border-color: var(--border-strong, rgba(28, 26, 20, 0.2));
 }
-.mini-alt-count {
+.card-alt-count {
   display: inline-grid;
   place-items: center;
-  min-width: 13px;
-  height: 13px;
+  min-width: 14px;
+  height: 14px;
   padding: 0 4px;
   border-radius: 7px;
   background: oklch(0.65 0.16 var(--c) / 0.18);
   color: oklch(0.40 0.14 var(--c));
-  font-size: 9px;
+  font-size: 9.5px;
   font-weight: 600;
   line-height: 1;
 }
-.minicard.no-color .mini-alt-count {
+.card.no-color .card-alt-count {
   background: var(--bg-softer, #ecebe5);
   color: var(--fg-mid, #4a463c);
 }
-.mini-alt-list {
+.card-alt-list {
   position: fixed;
   list-style: none;
   padding: 4px;
@@ -504,21 +540,21 @@ const imageStyle = computed(() => buildImageStyle(props.bookmark))
   border: 0.5px solid var(--border-strong, rgba(28, 26, 20, 0.16));
   border-radius: 8px;
   box-shadow: var(--shadow-md, 0 4px 14px rgba(28, 26, 20, 0.12));
-  min-width: 160px;
-  max-width: 240px;
+  min-width: 180px;
+  max-width: 260px;
   z-index: 1000;
 }
-.mini-alt-list li { margin: 0; }
-.mini-alt-list a {
+.card-alt-list li { margin: 0; }
+.card-alt-list a {
   display: block;
-  padding: 4px 8px;
+  padding: 5px 9px;
   border-radius: 5px;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--fg, #1c1a14);
   text-decoration: none;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.mini-alt-list a:hover { background: var(--bg-soft, #f3f1ec); }
+.card-alt-list a:hover { background: var(--bg-soft, #f3f1ec); }
 </style>

@@ -214,7 +214,12 @@ const handleTagClick = (tag: string) => {
     />
 
     <div v-if="children.length > 0" class="megacard-children">
-      <MiniCard v-for="child in children" :key="child.id" :bookmark="child" />
+      <MiniCard
+        v-for="child in children"
+        :key="child.id"
+        :bookmark="child"
+        @tag-click="handleTagClick"
+      />
     </div>
   </div>
 </template>
@@ -385,10 +390,10 @@ const handleTagClick = (tag: string) => {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   align-items: start;
-  gap: 6px;
-  padding-top: 4px;
+  gap: 10px;
+  padding-top: 8px;
   border-top: 0.5px solid var(--border, rgba(28, 26, 20, 0.08));
   margin-top: 2px;
 }
