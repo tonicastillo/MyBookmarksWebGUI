@@ -2,10 +2,10 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Widget } from '@/types'
 import {
-  fetchUnraidStatus,
-  runUnraidAction,
-  type UnraidAction,
-  type UnraidContainerInfo
+  fetchDockerContainers,
+  runDockerAction,
+  type DockerAction,
+  type DockerContainer
 } from '@/api/widgets'
 import { useCredentialsStore } from '@/stores/credentials'
 
@@ -15,10 +15,32 @@ const props = defineProps<{
 
 const credentialsStore = useCredentialsStore()
 
-const status = ref<UnraidContainerInfo | null>(null)
+const status = ref<DockerContainer | null>(null)
 const loading = ref(false)
-const actionInFlight = ref<UnraidAction | null>(null)
+const actionInFlight = ref<DockerAction | null>(null)
 const error = ref<string | null>(null)
+
+const matchesName = (c: DockerContainer, target: string): boolean => {
+  const bare = target.replace(/^\//, '')
+  const cbare = (c.name ?? '').replace(/^\//, '')
+  return cbare === bare
+}
+
+const pickContainer = (list: DockerContainer[]): DockerContainer => {
+  const found = list.find((c) => matchesName(c, cfg.value.containerName ?? ''))
+  if (found) return found
+  return {
+    id: null,
+    name: cfg.value.containerName ?? '',
+    image: null,
+    state: 'not-found',
+    status: `Contenedor "${cfg.value.containerName}" no encontrado en el servidor`,
+    cpuPercent: null,
+    memPercent: null,
+    memUsage: null,
+    autoStart: null
+  }
+}
 
 const cfg = computed(() => props.widget.config as {
   credentialId?: string
@@ -85,17 +107,18 @@ const friendlyError = (msg: string): string => {
   if (/ENOTFOUND|EAI_AGAIN|getaddrinfo/i.test(msg)) return 'No se encuentra el servidor'
   if (/ECONNRESET|socket hang up/i.test(msg)) return 'Conexión interrumpida'
   if (/HTTP 401|Unauthorized/i.test(msg)) return 'Credenciales inválidas'
+  if (/Graphql is offline/i.test(msg)) return 'GraphQL del servidor desactivado'
   if (/HTTP 5\d\d/.test(msg)) return 'Error en el servidor Unraid'
   return msg
 }
 
-const loadFromCache = (): { status: UnraidContainerInfo; lastUpdatedAt: number } | null => {
+const loadFromCache = (): { status: DockerContainer; lastUpdatedAt: number } | null => {
   try {
     const raw = localStorage.getItem(cacheKey.value)
     if (!raw) return null
     const parsed = JSON.parse(raw) as { status?: unknown; lastUpdatedAt?: unknown }
     if (typeof parsed.lastUpdatedAt !== 'number' || !parsed.status || typeof parsed.status !== 'object') return null
-    return { status: parsed.status as UnraidContainerInfo, lastUpdatedAt: parsed.lastUpdatedAt }
+    return { status: parsed.status as DockerContainer, lastUpdatedAt: parsed.lastUpdatedAt }
   } catch {
     return null
   }
@@ -127,7 +150,7 @@ const refresh = async () => {
   loading.value = true
   error.value = null
   try {
-    status.value = await fetchUnraidStatus(props.widget.id)
+    status.value = pickContainer(await fetchDockerContainers(props.widget.id))
     lastUpdatedAt.value = Date.now()
     nowMs.value = lastUpdatedAt.value
     consecutiveFailures = 0
@@ -142,12 +165,17 @@ const refresh = async () => {
   }
 }
 
-const doAction = async (action: UnraidAction) => {
+const doAction = async (action: DockerAction) => {
   if (!hasConfig.value || actionInFlight.value) return
+  const containerId = status.value?.id
+  if (!containerId) {
+    error.value = 'Contenedor no encontrado en el servidor'
+    return
+  }
   actionInFlight.value = action
   error.value = null
   try {
-    status.value = await runUnraidAction(props.widget.id, action)
+    status.value = pickContainer(await runDockerAction(props.widget.id, containerId, action))
     lastUpdatedAt.value = Date.now()
     nowMs.value = lastUpdatedAt.value
     consecutiveFailures = 0

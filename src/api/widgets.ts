@@ -36,28 +36,34 @@ export const reorderWidgets = async (bookmarkId: string, ids: string[]): Promise
   return unwrap(response)
 }
 
-export interface UnraidContainerInfo {
+export interface DockerContainer {
   id: string | null
   name: string
   image: string | null
   state: string | null
   status: string | null
-  autoStart: boolean | null
-  sizeRootFs: number | null
   cpuPercent: number | null
   memPercent: number | null
   memUsage: string | null
+  autoStart: boolean | null
 }
 
-export type UnraidAction = 'start' | 'stop' | 'restart'
+export type DockerAction = 'start' | 'stop' | 'restart'
 
-export const fetchUnraidStatus = async (widgetId: string): Promise<UnraidContainerInfo> => {
-  const response = await api.get<ApiResponse<UnraidContainerInfo>>(`/widgets/${widgetId}/unraid/status`)
+export const fetchDockerContainers = async (widgetId: string): Promise<DockerContainer[]> => {
+  const response = await api.get<ApiResponse<DockerContainer[]>>(`/widgets/${widgetId}/docker/containers`)
   return unwrap(response)
 }
 
-export const runUnraidAction = async (widgetId: string, action: UnraidAction): Promise<UnraidContainerInfo> => {
-  const response = await api.post<ApiResponse<UnraidContainerInfo>>(`/widgets/${widgetId}/unraid/action`, { action })
+export const runDockerAction = async (
+  widgetId: string,
+  containerId: string,
+  action: DockerAction
+): Promise<DockerContainer[]> => {
+  const response = await api.post<ApiResponse<DockerContainer[]>>(
+    `/widgets/${widgetId}/docker/action`,
+    { containerId, action }
+  )
   return unwrap(response)
 }
 

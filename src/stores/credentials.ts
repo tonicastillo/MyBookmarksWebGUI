@@ -9,6 +9,7 @@ import {
   type CredentialInput
 } from '@/api/credentials'
 import { useCache } from '@/composables/useCache'
+import { credentialTypeIdsByCategory, type CredentialCategory } from '@/credentials/registry'
 
 const CACHE_KEY = 'credentials'
 
@@ -25,6 +26,11 @@ export const useCredentialsStore = defineStore('credentials', () => {
 
   const byType = (type: string): Credential[] =>
     credentials.value.filter((c) => c.type === type)
+
+  const byCategory = (category: CredentialCategory): Credential[] => {
+    const ids = new Set(credentialTypeIdsByCategory(category))
+    return credentials.value.filter((c) => ids.has(c.type))
+  }
 
   const loadCredentials = async (forceRefresh = false): Promise<void> => {
     const cached = getFromCache<Credential[]>(CACHE_KEY)
@@ -97,6 +103,7 @@ export const useCredentialsStore = defineStore('credentials', () => {
     error,
     byId,
     byType,
+    byCategory,
     loadCredentials,
     create,
     update,

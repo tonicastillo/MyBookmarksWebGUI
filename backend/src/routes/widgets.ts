@@ -9,11 +9,11 @@ import {
 } from '../db/queries/widgets.js'
 import { getBookmarkById } from '../db/queries/bookmarks.js'
 import {
-  fetchUnraidContainer,
-  runUnraidAction,
-  type UnraidActionName,
-  type UnraidWidgetConfig
-} from '../widgets/unraid.js'
+  getDockerProvider,
+  type DockerAction,
+  type DockerProvider
+} from '../providers/docker/index.js'
+import { getContainersCached, invalidateContainers } from '../providers/docker/cache.js'
 import {
   fetchHomeAssistantStates,
   callHomeAssistantService,
@@ -50,7 +50,7 @@ const validateConfig = (value: unknown): Record<string, unknown> => {
   return value as Record<string, unknown>
 }
 
-const KNOWN_TYPES = new Set<string>(['hello-world', 'unraid-docker', 'notes', 'home-assistant'])
+const KNOWN_TYPES = new Set<string>(['hello-world', 'unraid-docker', 'docker-containers', 'notes', 'home-assistant'])
 
 router.post('/', (req, res) => {
   try {
@@ -134,61 +134,67 @@ router.post('/reorder', (req, res) => {
   }
 })
 
-const getUnraidWidgetOrFail = (id: string, userId: string): { widget: Widget; config: UnraidWidgetConfig } | { error: string; status: number } => {
-  const widget = getWidgetByIdForUser(id, userId)
-  if (!widget) return { error: 'Widget no encontrado', status: 404 }
-  if (widget.type !== 'unraid-docker') return { error: 'Widget no es de tipo unraid-docker', status: 400 }
-  const cfg = widget.config as { credentialId?: unknown; containerName?: unknown; serverLabel?: unknown }
-  const credentialId = typeof cfg.credentialId === 'string' ? cfg.credentialId : ''
-  const containerName = typeof cfg.containerName === 'string' ? cfg.containerName : ''
-  if (!credentialId) return { error: 'Widget mal configurado: falta credentialId', status: 400 }
-  if (!containerName) return { error: 'Widget mal configurado: falta containerName', status: 400 }
-  const credential = getCredentialByIdForUser(credentialId, userId)
-  if (!credential) return { error: 'Credencial no encontrada', status: 404 }
-  if (credential.type !== 'unraid') return { error: 'La credencial no es de tipo unraid', status: 400 }
-  const data = credential.data as { serverUrl?: unknown; apiToken?: unknown; serverLabel?: unknown }
-  const serverUrl = typeof data.serverUrl === 'string' ? data.serverUrl : ''
-  const apiToken = typeof data.apiToken === 'string' ? data.apiToken : ''
-  if (!serverUrl || !apiToken) {
-    return { error: 'Credencial unraid incompleta: faltan serverUrl o apiToken', status: 400 }
-  }
-  const serverLabel = typeof cfg.serverLabel === 'string' && cfg.serverLabel
-    ? cfg.serverLabel
-    : (typeof data.serverLabel === 'string' ? data.serverLabel : '')
-  return {
-    widget,
-    config: { serverUrl, serverLabel, containerName, apiToken }
-  }
+interface DockerResolved {
+  widget: Widget
+  credentialId: string
+  provider: DockerProvider
+  data: Record<string, unknown>
 }
 
-router.get('/:id/unraid/status', async (req, res) => {
-  const lookup = getUnraidWidgetOrFail(req.params.id, req.user!.id)
+/**
+ * Resuelve un widget que usa una conexión Docker (cualquier proveedor:
+ * unraid, casaos, dokploy). Comparten esta resolución el widget de lista
+ * (`docker-containers`) y el de un solo contenedor (`unraid-docker`).
+ */
+const resolveDockerWidget = (id: string, userId: string): DockerResolved | { error: string; status: number } => {
+  const widget = getWidgetByIdForUser(id, userId)
+  if (!widget) return { error: 'Widget no encontrado', status: 404 }
+  if (widget.type !== 'docker-containers' && widget.type !== 'unraid-docker') {
+    return { error: 'Widget no es de tipo Docker', status: 400 }
+  }
+  const cfg = widget.config as { credentialId?: unknown }
+  const credentialId = typeof cfg.credentialId === 'string' ? cfg.credentialId : ''
+  if (!credentialId) return { error: 'Widget mal configurado: falta credentialId', status: 400 }
+  const credential = getCredentialByIdForUser(credentialId, userId)
+  if (!credential) return { error: 'Conexión no encontrada', status: 404 }
+  const provider = getDockerProvider(credential.type)
+  if (!provider) return { error: `La conexión no es de gestión Docker: ${credential.type}`, status: 400 }
+  return { widget, credentialId, provider, data: credential.data }
+}
+
+router.get('/:id/docker/containers', async (req, res) => {
+  const lookup = resolveDockerWidget(req.params.id, req.user!.id)
   if ('error' in lookup) return sendError(res, lookup.status, lookup.error)
   try {
-    const data = await fetchUnraidContainer(lookup.config)
+    const data = await getContainersCached(lookup.credentialId, lookup.provider, lookup.data)
     const response: ApiResponse<typeof data> = { success: true, data }
     res.json(response)
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Error consultando Unraid'
-    logThrottled(`unraid:status:${req.params.id}:${message}`, `[unraid] status error (widget ${req.params.id}): ${message}`)
+    const message = err instanceof Error ? err.message : 'Error consultando el servidor'
+    logThrottled(`docker:containers:${req.params.id}:${message}`, `[docker] containers error (widget ${req.params.id}): ${message}`)
     sendError(res, 502, message)
   }
 })
 
-router.post('/:id/unraid/action', async (req, res) => {
-  const lookup = getUnraidWidgetOrFail(req.params.id, req.user!.id)
+router.post('/:id/docker/action', async (req, res) => {
+  const lookup = resolveDockerWidget(req.params.id, req.user!.id)
   if ('error' in lookup) return sendError(res, lookup.status, lookup.error)
-  const action = (req.body as { action?: string })?.action
-  const VALID: UnraidActionName[] = ['start', 'stop', 'restart']
-  if (!action || !VALID.includes(action as UnraidActionName)) {
+  const body = req.body as { containerId?: string; action?: string }
+  const containerId = typeof body.containerId === 'string' ? body.containerId : ''
+  const action = body.action
+  const VALID: DockerAction[] = ['start', 'stop', 'restart']
+  if (!containerId) return sendError(res, 400, 'containerId es obligatorio')
+  if (!action || !VALID.includes(action as DockerAction)) {
     return sendError(res, 400, `action debe ser uno de: ${VALID.join(', ')}`)
   }
   try {
-    const data = await runUnraidAction(lookup.config, action as UnraidActionName)
+    await lookup.provider.runAction(lookup.data, containerId, action as DockerAction)
+    invalidateContainers(lookup.credentialId)
+    const data = await getContainersCached(lookup.credentialId, lookup.provider, lookup.data)
     const response: ApiResponse<typeof data> = { success: true, data }
     res.json(response)
   } catch (err) {
-    console.error('[unraid] action error:', err)
+    console.error('[docker] action error:', err)
     sendError(res, 502, err instanceof Error ? err.message : 'Error ejecutando acción')
   }
 })

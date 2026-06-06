@@ -3,6 +3,8 @@ import HelloWorldConfig from './hello-world/HelloWorldConfig.vue'
 import HelloWorldRender from './hello-world/HelloWorldRender.vue'
 import UnraidDockerConfig from './unraid-docker/UnraidDockerConfig.vue'
 import UnraidDockerRender from './unraid-docker/UnraidDockerRender.vue'
+import DockerContainersConfig from './docker-containers/DockerContainersConfig.vue'
+import DockerContainersRender from './docker-containers/DockerContainersRender.vue'
 import NotesConfig from './notes/NotesConfig.vue'
 import NotesRender from './notes/NotesRender.vue'
 import HomeAssistantConfig from './home-assistant/HomeAssistantConfig.vue'
@@ -27,9 +29,20 @@ export const WIDGET_TYPES: WidgetTypeDef[] = [
     RenderComponent: HelloWorldRender
   },
   {
+    type: 'docker-containers',
+    displayName: 'Docker · Lista de contenedores',
+    description: 'Lista los contenedores de un servidor (Unraid, …) con su uso de CPU y permite arrancarlos, detenerlos o reiniciarlos.',
+    defaultConfig: {
+      credentialId: '',
+      serverLabel: ''
+    },
+    ConfigComponent: DockerContainersConfig,
+    RenderComponent: DockerContainersRender
+  },
+  {
     type: 'unraid-docker',
-    displayName: 'Unraid · Contenedor Docker',
-    description: 'Controla un contenedor de un servidor Unraid (start/stop/restart) y muestra su estado.',
+    displayName: 'Docker · Un contenedor',
+    description: 'Controla un contenedor concreto de un servidor Docker (start/stop/restart) y muestra su estado.',
     defaultConfig: {
       credentialId: '',
       containerName: '',

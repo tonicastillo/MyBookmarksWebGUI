@@ -7,10 +7,15 @@ export interface CredentialFieldDef {
   hint?: string
 }
 
+export type CredentialCategory = 'docker' | 'home-automation'
+
 export interface CredentialTypeDef {
   type: string
   displayName: string
   description: string
+  category: CredentialCategory
+  /** Si está marcado, el proveedor se muestra pero aún no es funcional. */
+  comingSoon?: boolean
   fields: CredentialFieldDef[]
 }
 
@@ -18,7 +23,8 @@ export const CREDENTIAL_TYPES: CredentialTypeDef[] = [
   {
     type: 'unraid',
     displayName: 'Servidor Unraid',
-    description: 'URL del servidor Unraid + API token (x-api-key) para los widgets de Docker.',
+    description: 'URL del servidor Unraid + API token (x-api-key) para gestión de Docker.',
+    category: 'docker',
     fields: [
       {
         key: 'serverUrl',
@@ -45,9 +51,26 @@ export const CREDENTIAL_TYPES: CredentialTypeDef[] = [
     ]
   },
   {
+    type: 'casaos',
+    displayName: 'CasaOS',
+    description: 'Gestión de Docker sobre un servidor CasaOS.',
+    category: 'docker',
+    comingSoon: true,
+    fields: []
+  },
+  {
+    type: 'dokploy',
+    displayName: 'Dokploy',
+    description: 'Gestión de Docker sobre un servidor Dokploy.',
+    category: 'docker',
+    comingSoon: true,
+    fields: []
+  },
+  {
     type: 'homeassistant',
     displayName: 'Home Assistant',
     description: 'URL base + Long-Lived Access Token para llamar a la REST API de Home Assistant.',
+    category: 'home-automation',
     fields: [
       {
         key: 'baseUrl',
@@ -70,3 +93,10 @@ export const CREDENTIAL_TYPES: CredentialTypeDef[] = [
 
 export const getCredentialType = (type: string): CredentialTypeDef | undefined =>
   CREDENTIAL_TYPES.find((c) => c.type === type)
+
+export const credentialTypesByCategory = (category: CredentialCategory): CredentialTypeDef[] =>
+  CREDENTIAL_TYPES.filter((c) => c.category === category)
+
+/** Tipos (== ids de proveedor) disponibles para una categoría (excluye los comingSoon). */
+export const credentialTypeIdsByCategory = (category: CredentialCategory): string[] =>
+  credentialTypesByCategory(category).filter((c) => !c.comingSoon).map((c) => c.type)

@@ -93,6 +93,10 @@ const onCreate = async () => {
   const def = selectedTypeDef.value
   if (!def || creating.value) return
   createError.value = null
+  if (def.comingSoon) {
+    createError.value = `${def.displayName} aún no está disponible.`
+    return
+  }
   const name = newName.value.trim()
   if (!name) {
     createError.value = 'El nombre es obligatorio.'
@@ -112,7 +116,7 @@ const onCreate = async () => {
     })
     resetCreateForm()
   } catch (e) {
-    createError.value = e instanceof Error ? e.message : 'Error creando credencial'
+    createError.value = e instanceof Error ? e.message : 'Error creando conexión'
   } finally {
     creating.value = false
   }
@@ -160,7 +164,7 @@ const onSaveEdit = async () => {
     })
     cancelEdit()
   } catch (e) {
-    editError.value = e instanceof Error ? e.message : 'Error actualizando credencial'
+    editError.value = e instanceof Error ? e.message : 'Error actualizando conexión'
   } finally {
     editBusy.value = false
   }
@@ -185,7 +189,7 @@ const confirmDelete = async (cred: Credential) => {
     confirmingDeleteId.value = null
   } catch (e) {
     const apiErr = e as ApiError
-    inlineErrorById.value[cred.id] = apiErr?.message ?? 'Error borrando credencial'
+    inlineErrorById.value[cred.id] = apiErr?.message ?? 'Error borrando conexión'
     const details = apiErr?.details
     if (details && Array.isArray(details.bookmarks)) {
       usageById.value[cred.id] = {
@@ -212,21 +216,26 @@ onMounted(() => {
 <template>
   <div class="cred-view">
     <header class="head">
-      <h1>Credenciales</h1>
+      <h1>Conexiones</h1>
       <p class="hint">
-        Datos reutilizables (URL, token, etc.) que los widgets seleccionan en lugar de copiarlos cada vez.
-        Cada usuario ve solo las suyas.
+        Conexiones a tus servidores (Unraid, Home Assistant, …) que los widgets seleccionan en lugar de
+        copiar URL y token cada vez. Cada usuario ve solo las suyas.
       </p>
     </header>
 
     <section class="card create">
-      <h2>Nueva credencial</h2>
+      <h2>Nueva conexión</h2>
       <form class="create-form" @submit.prevent="onCreate">
         <label class="field">
           <span class="label">Tipo</span>
           <select v-model="selectedType" @change="onTypeChange">
-            <option v-for="t in CREDENTIAL_TYPES" :key="t.type" :value="t.type">
-              {{ t.displayName }}
+            <option
+              v-for="t in CREDENTIAL_TYPES"
+              :key="t.type"
+              :value="t.type"
+              :disabled="t.comingSoon"
+            >
+              {{ t.displayName }}{{ t.comingSoon ? ' (próximamente)' : '' }}
             </option>
           </select>
           <p v-if="selectedTypeDef" class="field-hint">{{ selectedTypeDef.description }}</p>
@@ -253,8 +262,8 @@ onMounted(() => {
         </template>
 
         <div class="form-actions">
-          <button type="submit" class="primary" :disabled="creating">
-            {{ creating ? 'Creando…' : 'Crear credencial' }}
+          <button type="submit" class="primary" :disabled="creating || selectedTypeDef?.comingSoon">
+            {{ creating ? 'Creando…' : 'Crear conexión' }}
           </button>
         </div>
         <div v-if="createError" class="error">{{ createError }}</div>
@@ -262,11 +271,11 @@ onMounted(() => {
     </section>
 
     <section class="card list">
-      <h2>Tus credenciales</h2>
+      <h2>Tus conexiones</h2>
       <div v-if="store.loading" class="status">Cargando…</div>
       <div v-else-if="store.error" class="error">{{ store.error }}</div>
       <div v-else-if="store.credentials.length === 0" class="status">
-        Aún no tienes ninguna credencial guardada.
+        Aún no tienes ninguna conexión guardada.
       </div>
 
       <div v-else class="groups">
@@ -324,7 +333,7 @@ onMounted(() => {
 
                 <div v-else class="confirm-dialog" role="alertdialog">
                   <p class="confirm-text">
-                    ¿Borrar la credencial <strong>{{ cred.name }}</strong>? Esta acción no se puede deshacer.
+                    ¿Borrar la conexión <strong>{{ cred.name }}</strong>? Esta acción no se puede deshacer.
                   </p>
                   <div class="form-actions row">
                     <button

@@ -65,6 +65,7 @@ const onColorChange = (value: string | null) => {
     </div>
 
     <div class="children">
+      <!-- eslint-disable vue/no-mutating-props -- el v-model anidado es intencional para el drag&drop del árbol -->
       <VueDraggable
         v-model="node.children"
         :animation="180"
@@ -87,6 +88,7 @@ const onColorChange = (value: string | null) => {
           @end="emit('end')"
         />
       </VueDraggable>
+      <!-- eslint-enable vue/no-mutating-props -->
     </div>
   </div>
 </template>

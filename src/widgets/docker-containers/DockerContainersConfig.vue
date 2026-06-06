@@ -17,10 +17,9 @@ const credentialsStore = useCredentialsStore()
 const cfg = computed(() => props.modelValue as {
   credentialId?: string
   serverLabel?: string
-  containerName?: string
 })
 
-const update = (patch: Partial<{ credentialId: string; serverLabel: string; containerName: string }>) => {
+const update = (patch: Partial<{ credentialId: string; serverLabel: string }>) => {
   emit('update:modelValue', { ...cfg.value, ...patch })
 }
 
@@ -31,10 +30,6 @@ const credentialId = computed({
 const serverLabel = computed({
   get: () => cfg.value.serverLabel ?? '',
   set: (v: string) => update({ serverLabel: v })
-})
-const containerName = computed({
-  get: () => cfg.value.containerName ?? '',
-  set: (v: string) => update({ containerName: v })
 })
 
 const dockerConnections = computed(() => credentialsStore.byCategory('docker'))
@@ -49,7 +44,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="unr-config">
+  <div class="dkc-config">
     <label class="field">
       <span class="label">Conexión Docker</span>
       <select v-model="credentialId">
@@ -67,35 +62,26 @@ onMounted(() => {
     </label>
 
     <label class="field">
-      <span class="label">Nombre del contenedor</span>
-      <input
-        v-model="containerName"
-        type="text"
-        placeholder="plex"
-        autocomplete="off"
-      />
-    </label>
-
-    <label class="field">
       <span class="label">Etiqueta del servidor (opcional, override)</span>
       <input
         v-model="serverLabel"
         type="text"
-        placeholder="Si se deja vacío, usa la de la credencial"
+        placeholder="Si se deja vacío, usa la de la conexión"
         autocomplete="off"
       />
     </label>
 
     <p class="hint">
-      El token se almacena en la credencial y nunca se expone al navegador al ejecutar
-      acciones: el backend hace de proxy contra <code>/graphql</code> del servidor Unraid
-      (requiere Unraid 6.12+ con el plugin Connect API).
+      Lista todos los contenedores del servidor con su uso de CPU. Los datos y las acciones
+      (arrancar / detener / reiniciar) pasan por el backend, que hace de proxy contra el servidor;
+      el token nunca se expone al navegador. Se resaltan en ámbar los contenedores con CPU ≥ 70 %
+      y en rojo los de CPU ≥ 90 %.
     </p>
   </div>
 </template>
 
 <style scoped>
-.unr-config {
+.dkc-config {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -133,12 +119,6 @@ onMounted(() => {
   margin: 0;
 }
 .hint.warn { color: #b07a3a; }
-.hint code {
-  background: var(--bg-soft, #f3f1ec);
-  padding: 1px 4px;
-  border-radius: 3px;
-  font-size: 10.5px;
-}
 .link {
   background: transparent;
   border: 0;

@@ -465,8 +465,8 @@ const isFilterActiveForIds = (ids: string[]): boolean => {
         <button
           type="button"
           class="session-icon-btn"
-          aria-label="Credenciales"
-          title="Credenciales"
+          aria-label="Conexiones"
+          title="Conexiones"
           @click="goTo('/settings/credentials')"
         >
           <svg
