@@ -23,7 +23,6 @@ const startServer = async () => {
   const { default: usersRouter } = await import('./routes/users.js')
   const { default: credentialsRouter } = await import('./routes/credentials.js')
   const { requireAuth } = await import('./middleware/auth.js')
-  const { bookmarkBelongsToUser } = await import('./db/queries/bookmarks.js')
   const { purgeExpiredSessions } = await import('./db/queries/sessions.js')
 
   runMigrations()
@@ -48,15 +47,12 @@ const startServer = async () => {
   app.use('/api/widgets', requireAuth, widgetsRouter)
   app.use('/api/credentials', requireAuth, credentialsRouter)
 
-  app.get('/images/:filename', requireAuth, (req, res) => {
+  // Thumbnails públicos: se sirven por filename (= UUID del bookmark, inadivinable).
+  // Sin auth para que carguen vía <img> también en dev (frontend y backend en orígenes distintos).
+  app.get('/images/:filename', (req, res) => {
     const filename = req.params.filename
     if (!/^[A-Za-z0-9_-]+\.[A-Za-z0-9]+$/.test(filename)) {
       res.status(400).end()
-      return
-    }
-    const bookmarkId = filename.split('.')[0]
-    if (!bookmarkBelongsToUser(bookmarkId, req.user!.id)) {
-      res.status(404).end()
       return
     }
     const filepath = path.join(IMAGES_DIR, filename)
@@ -64,7 +60,7 @@ const startServer = async () => {
       res.status(404).end()
       return
     }
-    res.setHeader('Cache-Control', 'private, max-age=604800')
+    res.setHeader('Cache-Control', 'public, max-age=604800')
     res.sendFile(filepath)
   })
 
