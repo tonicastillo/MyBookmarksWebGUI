@@ -355,6 +355,41 @@ const replaceColorsInSvg = (
 const sanitizeSvg = (svgText: string): string =>
   svgText.replace(/<script[\s\S]*?<\/script>/gi, "");
 
+// Normaliza el SVG para que la previsualización inline (v-html) escale igual
+// que el <img object-fit:cover> del listado: garantiza un viewBox y elimina
+// width/height fijos, que de otro modo recortan o descolocan el dibujo.
+const parseSvgLength = (value: string | null): number | null => {
+  if (!value || value.includes("%")) return null;
+  const n = Number.parseFloat(value);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
+const normalizeSvg = (svgText: string): string => {
+  const cleaned = sanitizeSvg(svgText);
+  try {
+    const doc = new DOMParser().parseFromString(cleaned, "image/svg+xml");
+    if (doc.querySelector("parsererror")) return cleaned;
+    const svg = doc.querySelector("svg");
+    if (!svg) return cleaned;
+
+    if (!svg.hasAttribute("viewBox")) {
+      const w = parseSvgLength(svg.getAttribute("width"));
+      const h = parseSvgLength(svg.getAttribute("height"));
+      if (w !== null && h !== null) {
+        svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+      }
+    }
+    svg.removeAttribute("width");
+    svg.removeAttribute("height");
+    if (!svg.hasAttribute("preserveAspectRatio")) {
+      svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+    }
+    return svg.outerHTML;
+  } catch {
+    return cleaned;
+  }
+};
+
 const svgColors = computed(() =>
   svgContent.value ? parseColorsFromSvg(svgContent.value) : [],
 );
@@ -382,7 +417,7 @@ const applySvgColor = (newColor: string | null) => {
 const loadSvgFromFile = (file: File) => {
   const reader = new FileReader();
   reader.onload = () => {
-    svgContent.value = sanitizeSvg(reader.result as string);
+    svgContent.value = normalizeSvg(reader.result as string);
     svgModified.value = false;
     selectedSvgColors.value = new Set();
   };
@@ -406,7 +441,7 @@ watchEffect(async () => {
       return;
     }
     const text = await res.text();
-    svgContent.value = sanitizeSvg(text);
+    svgContent.value = normalizeSvg(text);
     svgModified.value = false;
     selectedSvgColors.value = new Set();
   } catch (err) {
