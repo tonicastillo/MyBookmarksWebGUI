@@ -65,6 +65,14 @@ const searchUrlTemplate = ref(
 );
 const tags = ref<string[]>([...(props.bookmark?.tags ?? p?.tags ?? [])]);
 const tagInput = ref("");
+const valoration = ref<number | null>(
+  props.bookmark?.valoration ?? p?.valoration ?? null,
+);
+
+const setValoration = (value: number) => {
+  // Click sobre la estrella ya activa → quita la valoración.
+  valoration.value = valoration.value === value ? null : value;
+};
 
 const cloneAlternateUrls = (list: AlternateUrl[] | undefined): AlternateUrl[] =>
   (list ?? []).map((a) => ({ title: a.title ?? "", url: a.url ?? "" }));
@@ -233,6 +241,7 @@ const buildSnapshot = () =>
     color: color.value,
     searchPlaceholder: searchPlaceholder.value,
     searchUrlTemplate: searchUrlTemplate.value,
+    valoration: valoration.value,
     imageScale: imageScale.value,
     imageBgColor: imageBgColor.value,
     imageBgColor2: imageBgColor2.value,
@@ -519,6 +528,7 @@ const handleSubmit = (event: Event) => {
     color: color.value,
     searchPlaceholder: searchPlaceholder.value.trim() || null,
     searchUrlTemplate: searchUrlTemplate.value.trim() || null,
+    valoration: valoration.value,
     imageScale: imageScale.value < 1 ? imageScale.value : null,
     imageBgColor: imageBgColor.value || null,
     imageBgColor2: useGradient.value ? imageBgColor2.value || null : null,
@@ -549,6 +559,7 @@ watch(
     color.value = b.color ?? null;
     searchPlaceholder.value = b.searchPlaceholder ?? "";
     searchUrlTemplate.value = b.searchUrlTemplate ?? "";
+    valoration.value = b.valoration ?? null;
     imageScale.value = b.imageScale ?? 1;
     imageBgColor.value = b.imageBgColor ?? null;
     imageBgColor2.value = b.imageBgColor2 ?? null;
@@ -928,6 +939,51 @@ watch(
           <CategoryColorPicker v-model="color" />
         </div>
 
+        <div class="color-row">
+          <span class="label">Valoración</span>
+          <div
+            class="stars-input"
+            role="radiogroup"
+            aria-label="Valoración en estrellas"
+          >
+            <button
+              v-for="n in 3"
+              :key="n"
+              type="button"
+              class="star-btn"
+              :class="{ active: valoration !== null && n <= valoration }"
+              :aria-label="`${n} estrella${n === 1 ? '' : 's'}`"
+              :aria-pressed="valoration === n"
+              :title="valoration === n ? 'Quitar valoración' : `${n} estrella${n === 1 ? '' : 's'}`"
+              @click="setValoration(n)"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                :fill="valoration !== null && n <= valoration ? 'currentColor' : 'none'"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M12 2.5l2.9 5.88 6.49.94-4.7 4.58 1.11 6.46L12 17.9l-5.8 3.05 1.11-6.46-4.7-4.58 6.49-.94L12 2.5z"
+                />
+              </svg>
+            </button>
+            <button
+              v-if="valoration !== null"
+              type="button"
+              class="star-clear"
+              title="Sin valoración"
+              aria-label="Quitar valoración"
+              @click="valoration = null"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+
         <label class="field toggle">
           <input v-model="visibleAtStart" type="checkbox" />
           <span>Visible en la home</span>
@@ -1292,6 +1348,50 @@ watch(
 }
 .color-row .label {
   margin: 0;
+}
+
+.stars-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.star-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--fg-faint, #a8a294);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: color 120ms ease, background 120ms ease;
+}
+.star-btn:hover {
+  background: var(--bg-soft, #f3f1ec);
+  color: #f5a623;
+}
+.star-btn.active {
+  color: #f5a623;
+}
+.star-clear {
+  margin-left: 4px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  border: 0.5px solid var(--border, rgba(28, 26, 20, 0.16));
+  background: var(--bg-elev, #ffffff);
+  color: var(--fg-soft, #7a7468);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+.star-clear:hover {
+  background: var(--bg-soft, #f3f1ec);
+  color: var(--fg, #1c1a14);
 }
 
 .tags-input {

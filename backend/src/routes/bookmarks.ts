@@ -97,6 +97,15 @@ const validateAlternateUrls = (value: unknown): AlternateUrl[] | null | undefine
   return list
 }
 
+const validateValoration = (value: unknown): number | null | undefined => {
+  if (value === undefined) return undefined
+  if (value === null) return null
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 3) {
+    throw new Error('valoration debe ser 1, 2, 3 o null')
+  }
+  return value
+}
+
 const sanitizeBookmarkInput = (input: BookmarkInput): BookmarkInput => {
   const color = validateColor(input.color)
   const resboard = validateResboard(input.resboard)
@@ -104,6 +113,7 @@ const sanitizeBookmarkInput = (input: BookmarkInput): BookmarkInput => {
   const imageBgColor = validateBgColor(input.imageBgColor)
   const imageBgColor2 = validateBgColor(input.imageBgColor2)
   const alternateUrls = validateAlternateUrls(input.alternateUrls)
+  const valoration = validateValoration(input.valoration)
   const patch: BookmarkInput = { ...input }
   if (color !== undefined) patch.color = color
   if (resboard !== undefined) patch.resboard = resboard
@@ -111,6 +121,7 @@ const sanitizeBookmarkInput = (input: BookmarkInput): BookmarkInput => {
   if (imageBgColor !== undefined) patch.imageBgColor = imageBgColor
   if (imageBgColor2 !== undefined) patch.imageBgColor2 = imageBgColor2
   if (alternateUrls !== undefined) patch.alternateUrls = alternateUrls
+  if (valoration !== undefined) patch.valoration = valoration
   if (patch.isMegaCard === true) patch.parentBookmarkId = null
   return patch
 }

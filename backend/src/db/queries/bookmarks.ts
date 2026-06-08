@@ -21,6 +21,7 @@ interface BookmarkRow {
   image_bg_color2: string | null
   resboard: string | null
   alternate_urls: string | null
+  valoration: number | null
   updated_at: string | null
 }
 
@@ -98,6 +99,7 @@ const rowToBookmark = (
   imageBgColor2: row.image_bg_color2 ?? undefined,
   resboard: parseResboard(row.resboard),
   alternateUrls: parseAlternateUrls(row.alternate_urls),
+  valoration: row.valoration ?? undefined,
   widgets: widgetsByBookmark.get(row.id) ?? []
 })
 
@@ -157,6 +159,7 @@ export interface BookmarkInput {
   tags?: string[]
   resboard?: Record<string, unknown> | null
   alternateUrls?: AlternateUrl[] | null
+  valoration?: number | null
 }
 
 const serializeResboard = (value: BookmarkInput['resboard']): string | null => {
@@ -193,13 +196,13 @@ export const insertBookmark = (id: string, input: BookmarkInput, userId: string)
         visible_at_start, is_mega_card, color,
         search_placeholder, search_url_template, image_url,
         image_scale, image_bg_color, image_bg_color2, resboard,
-        alternate_urls, user_id
+        alternate_urls, valoration, user_id
       ) VALUES (
         @id, @name, @url, @subtitle, @categoryId, @parentBookmarkId,
         @visibleAtStart, @isMegaCard, @color,
         @searchPlaceholder, @searchUrlTemplate, @imageUrl,
         @imageScale, @imageBgColor, @imageBgColor2, @resboard,
-        @alternateUrls, @userId
+        @alternateUrls, @valoration, @userId
       )
     `).run({
       id,
@@ -219,6 +222,7 @@ export const insertBookmark = (id: string, input: BookmarkInput, userId: string)
       imageBgColor2: input.imageBgColor2 ?? null,
       resboard: serializeResboard(input.resboard),
       alternateUrls: serializeAlternateUrls(input.alternateUrls),
+      valoration: input.valoration ?? null,
       userId
     })
 
@@ -257,6 +261,7 @@ export const updateBookmark = (id: string, input: Partial<BookmarkInput>, userId
   if (input.imageBgColor2 !== undefined) setField('image_bg_color2', 'imageBgColor2', input.imageBgColor2 ?? null)
   if (input.resboard !== undefined) setField('resboard', 'resboard', serializeResboard(input.resboard))
   if (input.alternateUrls !== undefined) setField('alternate_urls', 'alternateUrls', serializeAlternateUrls(input.alternateUrls))
+  if (input.valoration !== undefined) setField('valoration', 'valoration', input.valoration ?? null)
 
   const tx = db.transaction(() => {
     if (fields.length > 0) {

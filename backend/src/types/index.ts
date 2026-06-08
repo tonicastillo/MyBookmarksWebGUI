@@ -30,6 +30,8 @@ export interface Bookmark {
   imageBgColor2?: string | null
   resboard?: Record<string, unknown> | null
   alternateUrls?: AlternateUrl[]
+  // Valoración en estrellas: 1, 2, 3 o ausente (sin valorar).
+  valoration?: number | null
   widgets?: Widget[]
 }
 

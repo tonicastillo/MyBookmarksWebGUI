@@ -108,6 +108,7 @@ export interface BookmarkInput {
   tags?: string[]
   resboard?: Record<string, unknown> | null
   alternateUrls?: AlternateUrl[] | null
+  valoration?: number | null
 }
 
 export interface CategoryInput {

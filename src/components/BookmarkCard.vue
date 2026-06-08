@@ -11,6 +11,7 @@ import {
   buildDuplicatePayload,
 } from '@/composables/useBookmarkDuplicate'
 import WidgetRenderer from './widgets/WidgetRenderer.vue'
+import BookmarkStars from './BookmarkStars.vue'
 
 const categoriesStore = useCategoriesStore()
 const editDrawer = useEditDrawerStore()
@@ -183,6 +184,12 @@ onBeforeUnmount(() => {
         <div v-if="bookmark.subtitle || displayUrl" class="card-sub">
           {{ bookmark.subtitle || displayUrl }}
         </div>
+
+        <BookmarkStars
+          v-if="bookmark.valoration"
+          :valoration="bookmark.valoration"
+          class="card-stars"
+        />
 
         <div v-if="bookmark.tags.length > 0" class="card-tags">
           <button
@@ -440,6 +447,10 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   line-height: 1.4;
+}
+
+.card-stars {
+  margin-top: 4px;
 }
 
 .card-tags {

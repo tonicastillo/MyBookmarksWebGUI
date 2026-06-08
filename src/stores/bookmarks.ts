@@ -151,11 +151,19 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
       return !!g.bookmark.categoryId && categorySet.has(g.bookmark.categoryId)
     }
 
-    return allGroups.filter(g => {
-      if (!matchesCategory(g)) return false
-      const all = [g.bookmark, ...g.children]
-      return all.some(b => matchesQuery(b) && matchesTags(b))
-    })
+    // Valoración del grupo = mayor valoración entre el lead y sus hijos.
+    const groupScore = (g: BookmarkGroup): number =>
+      [g.bookmark, ...g.children].reduce((max, b) => Math.max(max, b.valoration ?? 0), 0)
+
+    return allGroups
+      .filter(g => {
+        if (!matchesCategory(g)) return false
+        const all = [g.bookmark, ...g.children]
+        return all.some(b => matchesQuery(b) && matchesTags(b))
+      })
+      // Los mejor valorados primero; Array.sort es estable, así que el resto
+      // conserva el orden original.
+      .sort((a, b) => groupScore(b) - groupScore(a))
   }
 
   const search = (query: string): Bookmark[] => {

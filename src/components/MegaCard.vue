@@ -12,6 +12,7 @@ import {
 } from '@/composables/useBookmarkDuplicate'
 import MiniCard from './MiniCard.vue'
 import WidgetRenderer from './widgets/WidgetRenderer.vue'
+import BookmarkStars from './BookmarkStars.vue'
 
 const categoriesStore = useCategoriesStore()
 const editDrawer = useEditDrawerStore()
@@ -148,6 +149,11 @@ const handleTagClick = (tag: string) => {
       <div class="megacard-title-block">
         <div class="megacard-title">{{ parent.name }}</div>
         <div v-if="parent.subtitle" class="megacard-sub">{{ parent.subtitle }}</div>
+        <BookmarkStars
+          v-if="parent.valoration"
+          :valoration="parent.valoration"
+          class="megacard-stars"
+        />
       </div>
       <span class="megacard-badge">{{ children.length }} sites</span>
       <a
@@ -301,6 +307,9 @@ const handleTagClick = (tag: string) => {
   font-size: 11.5px;
   color: var(--fg-soft, #7a7468);
   margin-top: 1px;
+}
+.megacard-stars {
+  margin-top: 3px;
 }
 
 .megacard-badge {
