@@ -14,6 +14,7 @@ export interface BookmarkDuplicateData {
   searchUrlTemplate: string;
   tags: string[];
   alternateUrls: AlternateUrl[];
+  valoration: number | null;
   imageScale: number;
   imageBgColor: string | null;
   imageBgColor2: string | null;
@@ -63,6 +64,7 @@ export const buildDuplicatePayload = async (
     searchUrlTemplate: bookmark.searchUrlTemplate ?? "",
     tags: [...bookmark.tags],
     alternateUrls: (bookmark.alternateUrls ?? []).map((a) => ({ ...a })),
+    valoration: bookmark.valoration ?? null,
     imageScale: bookmark.imageScale ?? 1,
     imageBgColor: bookmark.imageBgColor ?? null,
     imageBgColor2: bookmark.imageBgColor2 ?? null,

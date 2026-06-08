@@ -53,7 +53,7 @@ interface Bookmark {
   categoryId?: string
   visibleAtStart: boolean
   status: 'Not started' | 'In progress' | 'Done'
-  valoration?: string               // p. ej. '⭐⭐⭐'
+  valoration?: number | null        // 1, 2, 3 o null (sin valorar); se muestra como estrellas
   imageUrl?: string                 // URL servida por backend (/images/...) o externa
   createdTime: string
   parentBookmarkId?: string         // mega card: padre del grupo

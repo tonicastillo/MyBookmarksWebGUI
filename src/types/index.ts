@@ -48,6 +48,10 @@ export interface Bookmark {
   // Generic JSON metadata for the resboard feature.
   resboard?: Record<string, unknown> | null
 
+  // Valoración en estrellas: 1, 2, 3 o ausente (sin valorar).
+  // Los bookmarks mejor valorados aparecen primero al buscar por texto o tags.
+  valoration?: number | null
+
   widgets?: Widget[]
 }
 

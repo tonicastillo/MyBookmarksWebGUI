@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS bookmarks (
   image_bg_color2       TEXT,
   resboard              TEXT,
   alternate_urls        TEXT,
+  valoration            INTEGER,
   user_id               TEXT REFERENCES users(id) ON DELETE CASCADE,
   created_at            TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
@@ -358,6 +359,14 @@ const MIGRATIONS: Migration[] = [
     up: (database) => {
       if (!hasColumn(database, 'bookmarks', 'alternate_urls')) {
         database.exec(`ALTER TABLE bookmarks ADD COLUMN alternate_urls TEXT`)
+      }
+    }
+  },
+  {
+    version: 9,
+    up: (database) => {
+      if (!hasColumn(database, 'bookmarks', 'valoration')) {
+        database.exec(`ALTER TABLE bookmarks ADD COLUMN valoration INTEGER`)
       }
     }
   }
