@@ -4,10 +4,21 @@ import { RouterView, useRoute } from 'vue-router'
 import Sidebar from '@/components/Sidebar.vue'
 import BookmarkEditDrawer from '@/components/BookmarkEditDrawer.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useAutoSync } from '@/composables/useAutoSync'
 
 const route = useRoute()
 const auth = useAuthStore()
+const autoSync = useAutoSync()
 const isSidebarOpen = ref(false)
+
+// Arranca la sincronización automática en cuanto hay sesión.
+watch(
+  () => auth.isAuthenticated,
+  (ok) => {
+    if (ok) autoSync.start()
+  },
+  { immediate: true }
+)
 
 const toggleSidebar = () => {
   isSidebarOpen.value = !isSidebarOpen.value

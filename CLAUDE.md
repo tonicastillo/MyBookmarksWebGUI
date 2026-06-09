@@ -111,7 +111,8 @@ Todas las respuestas JSON usan `{ success, data, error? }` (`ApiResponse<T>`).
 4. **Búsqueda**: por nombre, subtitle y tags.
 
 ### Caché frontend
-- Al iniciar la app: si hay caché válida (TTL 24h), se usa; en paralelo se refresca desde el backend.
+- Al iniciar la app: si hay caché (aunque esté expirada), se muestra al instante; en paralelo se refresca desde el backend.
+- Auto-sync (`useAutoSync`, arrancado desde `App.vue` al autenticarse): sincroniza siempre al entrar (una vez por sesión), cada 10 min con la pestaña visible, y al volver a la pestaña si la última sincronización tiene más de 10 min.
 - Los stores actualizan localStorage tras cada mutación (create / update / delete) para que el siguiente arranque vea el cambio inmediatamente.
 
 ## Estructura del Proyecto
