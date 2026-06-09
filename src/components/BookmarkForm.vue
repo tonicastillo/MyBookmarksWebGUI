@@ -895,79 +895,148 @@ watch(
           <input v-model="name" type="text" required />
         </label>
 
-        <label class="field">
-          <span class="label">URL</span>
-          <input v-model="url" type="url" placeholder="https://…" />
-        </label>
-
         <div class="field">
-          <div class="alt-urls-header">
-            <span class="label">URLs alternativas</span>
-            <button
-              type="button"
-              class="alt-url-add"
-              :title="'Añadir URL alternativa'"
-              aria-label="Añadir URL alternativa"
-              @click="addAlternateUrl"
-            >
-              +
-            </button>
-          </div>
-          <div
-            v-for="(item, index) in alternateUrls"
-            :key="index"
-            class="alt-url-row"
-          >
-            <input
-              v-model="item.title"
-              type="text"
-              placeholder="Título"
-              class="alt-url-title"
-            />
-            <input
-              v-model="item.url"
-              type="url"
-              placeholder="https://…"
-              class="alt-url-url"
-            />
-            <button
-              type="button"
-              class="alt-url-remove"
-              :title="'Quitar'"
-              aria-label="Quitar URL alternativa"
-              @click="removeAlternateUrl(index)"
-            >
-              ×
-            </button>
+          <span class="label">Tipo</span>
+          <div class="type-toggle" role="radiogroup" aria-label="Tipo de bookmark">
+            <label class="type-option" :class="{ selected: !isMegaCard }">
+              <input
+                v-model="isMegaCard"
+                type="radio"
+                name="bookmark-type"
+                :value="false"
+              />
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M6 4h12v17l-6-4.5L6 21V4z" />
+              </svg>
+              <span>Independiente</span>
+            </label>
+            <label class="type-option" :class="{ selected: isMegaCard }">
+              <input
+                v-model="isMegaCard"
+                type="radio"
+                name="bookmark-type"
+                :value="true"
+              />
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <rect x="3" y="3" width="8" height="8" rx="1.5" />
+                <rect x="13" y="3" width="8" height="8" rx="1.5" />
+                <rect x="3" y="13" width="8" height="8" rx="1.5" />
+                <rect x="13" y="13" width="8" height="8" rx="1.5" />
+              </svg>
+              <span>Grupo</span>
+            </label>
           </div>
         </div>
 
-        <label class="field">
-          <span class="label">Subtítulo</span>
-          <input v-model="subtitle" type="text" />
-        </label>
-
-        <div class="row">
+        <template v-if="!isMegaCard">
           <label class="field">
-            <span class="label">Categoría</span>
-            <select v-model="categoryId">
-              <option value="">— Sin categoría —</option>
-              <option v-for="c in sortedCategories" :key="c.id" :value="c.id">
-                {{ c.name }}
-              </option>
-            </select>
+            <span class="label">URL</span>
+            <input v-model="url" type="url" placeholder="https://…" />
           </label>
 
+          <div class="field">
+            <div class="alt-urls-header">
+              <span class="label">URLs alternativas</span>
+              <button
+                type="button"
+                class="alt-url-add"
+                :title="'Añadir URL alternativa'"
+                aria-label="Añadir URL alternativa"
+                @click="addAlternateUrl"
+              >
+                +
+              </button>
+            </div>
+            <div
+              v-for="(item, index) in alternateUrls"
+              :key="index"
+              class="alt-url-row"
+            >
+              <input
+                v-model="item.title"
+                type="text"
+                placeholder="Título"
+                class="alt-url-title"
+              />
+              <input
+                v-model="item.url"
+                type="url"
+                placeholder="https://…"
+                class="alt-url-url"
+              />
+              <button
+                type="button"
+                class="alt-url-remove"
+                :title="'Quitar'"
+                aria-label="Quitar URL alternativa"
+                @click="removeAlternateUrl(index)"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+
           <label class="field">
-            <span class="label">Bookmark padre (mega card)</span>
-            <select v-model="parentBookmarkId" :disabled="isMegaCard">
+            <span class="label">Grupo al que pertenece</span>
+            <select v-model="parentBookmarkId">
               <option value="">— Ninguno —</option>
               <option v-for="b in possibleParents" :key="b.id" :value="b.id">
                 {{ b.name }}
               </option>
             </select>
           </label>
-        </div>
+
+          <details class="advanced">
+            <summary>Búsqueda interna (opcional)</summary>
+            <div class="row">
+              <label class="field">
+                <span class="label">Placeholder</span>
+                <input v-model="searchPlaceholder" type="text" />
+              </label>
+              <label class="field">
+                <span class="label">URL plantilla (con {q})</span>
+                <input
+                  v-model="searchUrlTemplate"
+                  type="url"
+                  placeholder="https://…/search?q={q}"
+                />
+              </label>
+            </div>
+          </details>
+        </template>
+
+        <label class="field">
+          <span class="label">Subtítulo</span>
+          <input v-model="subtitle" type="text" />
+        </label>
+
+        <label class="field">
+          <span class="label">Categoría</span>
+          <select v-model="categoryId">
+            <option value="">— Sin categoría —</option>
+            <option v-for="c in sortedCategories" :key="c.id" :value="c.id">
+              {{ c.name }}
+            </option>
+          </select>
+        </label>
 
         <div class="color-row">
           <span class="label">Color</span>
@@ -1024,11 +1093,6 @@ watch(
           <span>Visible en la home</span>
         </label>
 
-        <label class="field toggle">
-          <input v-model="isMegaCard" type="checkbox" />
-          <span>Es Mega Card (puede tener bookmarks hijos)</span>
-        </label>
-
         <div class="field">
           <span class="label">Tags</span>
           <div class="tags-input">
@@ -1060,24 +1124,6 @@ watch(
             </button>
           </div>
         </div>
-
-        <details class="advanced">
-          <summary>Búsqueda interna (opcional)</summary>
-          <div class="row">
-            <label class="field">
-              <span class="label">Placeholder</span>
-              <input v-model="searchPlaceholder" type="text" />
-            </label>
-            <label class="field">
-              <span class="label">URL plantilla (con {q})</span>
-              <input
-                v-model="searchUrlTemplate"
-                type="url"
-                placeholder="https://…/search?q={q}"
-              />
-            </label>
-          </div>
-        </details>
       </div>
     </div>
 
@@ -1371,6 +1417,51 @@ watch(
   flex-direction: row;
   align-items: center;
   gap: 8px;
+}
+
+.type-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.type-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 38px;
+  border: 0.5px solid var(--border, rgba(28, 26, 20, 0.16));
+  border-radius: 8px;
+  background: var(--bg-elev, #ffffff);
+  color: var(--fg-soft, #7a7468);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+}
+.type-option:hover {
+  background: var(--bg-softer, #ecebe5);
+  border-color: var(--border-strong, rgba(28, 26, 20, 0.24));
+}
+.type-option.selected {
+  background: var(--fg, #1c1a14);
+  color: var(--bg, #faf9f7);
+  border-color: var(--fg, #1c1a14);
+}
+.type-option input[type="radio"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.type-option svg {
+  flex-shrink: 0;
 }
 .field.toggle span {
   font-size: 13.5px;
