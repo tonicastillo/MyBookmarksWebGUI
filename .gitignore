@@ -36,6 +36,9 @@ lerna-debug.log*
 .env.local
 .env.*.local
 
+# Worktrees locales de Claude Code
+.claude/worktrees/
+
 # Datos locales (SQLite + imágenes subidas)
 backend/data/
 
