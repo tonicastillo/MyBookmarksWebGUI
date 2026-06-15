@@ -5,7 +5,7 @@ import { VueDraggable } from 'vue-draggable-plus'
 import { useCategoriesStore, type CategoryNode } from '@/stores/categories'
 import { useBookmarksStore } from '@/stores/bookmarks'
 import CategoryTreeNode from '@/components/CategoryTreeNode.vue'
-import type { CategoryReorderEntry } from '@/api/notion'
+import type { CategoryReorderEntry } from '@/api/client'
 
 const router = useRouter()
 const categoriesStore = useCategoriesStore()

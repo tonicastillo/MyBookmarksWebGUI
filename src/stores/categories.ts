@@ -9,7 +9,7 @@ import {
   reorderCategories as apiReorderCategories,
   type CategoryInput,
   type CategoryReorderEntry
-} from '@/api/notion'
+} from '@/api/client'
 import { useCache } from '@/composables/useCache'
 
 export interface CategoryNode extends Category {

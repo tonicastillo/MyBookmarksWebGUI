@@ -9,7 +9,7 @@ import {
   uploadBookmarkImage as apiUploadImage,
   deleteBookmarkImage as apiDeleteImage,
   type BookmarkInput
-} from '@/api/notion'
+} from '@/api/client'
 import { useCache } from '@/composables/useCache'
 import { groupBookmarksByParent, type BookmarkGroup } from '@/composables/useBookmarkGroups'
 

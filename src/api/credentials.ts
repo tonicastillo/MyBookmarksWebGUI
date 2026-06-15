@@ -1,4 +1,4 @@
-import { api } from '@/api/notion'
+import { api } from '@/api/client'
 import type { ApiResponse, Credential } from '@/types'
 
 const unwrap = <T>(response: { data: ApiResponse<T> }): T => {

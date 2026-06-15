@@ -3,7 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCredentialsStore } from '@/stores/credentials'
 import { CREDENTIAL_TYPES, getCredentialType, type CredentialTypeDef } from '@/credentials/registry'
-import type { ApiError } from '@/api/notion'
+import type { ApiError } from '@/api/client'
 import type { Credential } from '@/types'
 
 const router = useRouter()

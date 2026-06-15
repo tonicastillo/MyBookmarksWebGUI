@@ -6,7 +6,7 @@ import {
   updateUserApi,
   deleteUserApi,
   type ManagedUser
-} from '@/api/notion'
+} from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()

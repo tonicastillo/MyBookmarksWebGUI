@@ -5,7 +5,7 @@ import { useBookmarksStore } from '@/stores/bookmarks'
 import { useCategoriesStore } from '@/stores/categories'
 import BookmarkForm from '@/components/BookmarkForm.vue'
 import WidgetEditor from '@/components/widgets/WidgetEditor.vue'
-import type { BookmarkInput } from '@/api/notion'
+import type { BookmarkInput } from '@/api/client'
 import {
   useBookmarkDuplicate,
   type BookmarkDuplicateData,

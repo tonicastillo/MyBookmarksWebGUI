@@ -3,7 +3,7 @@ import { computed, ref, watch, watchEffect } from "vue";
 import type { AlternateUrl, Bookmark } from "@/types";
 import { useCategoriesStore } from "@/stores/categories";
 import { useBookmarksStore } from "@/stores/bookmarks";
-import type { BookmarkInput } from "@/api/notion";
+import type { BookmarkInput } from "@/api/client";
 import CategoryColorPicker from "@/components/CategoryColorPicker.vue";
 import { buildImageStyle } from "@/composables/useImageStyle";
 import {

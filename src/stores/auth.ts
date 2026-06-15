@@ -5,7 +5,7 @@ import {
   login as apiLogin,
   logout as apiLogout,
   type AuthUser
-} from '@/api/notion'
+} from '@/api/client'
 import { useCache } from '@/composables/useCache'
 
 const SESSION_USER_KEY = 'mybookmarks_session_user'
