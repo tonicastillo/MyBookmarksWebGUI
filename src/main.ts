@@ -3,7 +3,7 @@ import { createPinia } from 'pinia'
 import axios from 'axios'
 import App from './App.vue'
 import router from './router'
-import { api } from '@/api/notion'
+import { api, type ApiError } from '@/api/notion'
 import { useAuthStore } from '@/stores/auth'
 import './style.css'
 
@@ -15,7 +15,12 @@ app.use(router)
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (axios.isAxiosError(error) && error.response?.status === 401) {
+    // El interceptor de notion.ts corre antes y reemplaza el AxiosError por un
+    // Error plano (preservando `status`), así que el 401 puede llegar de ambas formas.
+    const status = axios.isAxiosError(error)
+      ? error.response?.status
+      : (error as ApiError | undefined)?.status
+    if (status === 401) {
       const auth = useAuthStore()
       if (auth.isAuthenticated) {
         auth.setUser(null)

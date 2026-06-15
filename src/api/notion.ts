@@ -65,7 +65,8 @@ export const fetchMe = async (): Promise<AuthUser | null> => {
     const response = await api.get<ApiResponse<AuthUser>>('/auth/me')
     return unwrap(response)
   } catch (err) {
-    if (axios.isAxiosError(err) && err.response?.status === 401) return null
+    const status = axios.isAxiosError(err) ? err.response?.status : (err as ApiError | undefined)?.status
+    if (status === 401) return null
     throw err
   }
 }
