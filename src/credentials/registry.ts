@@ -7,7 +7,7 @@ export interface CredentialFieldDef {
   hint?: string
 }
 
-export type CredentialCategory = 'docker' | 'home-automation'
+export type CredentialCategory = 'docker' | 'home-automation' | 'nas'
 
 export interface CredentialTypeDef {
   type: string
@@ -86,6 +86,37 @@ export const CREDENTIAL_TYPES: CredentialTypeDef[] = [
         placeholder: '••••••••',
         required: true,
         hint: 'Crea un Long-Lived Access Token en tu perfil de Home Assistant.'
+      }
+    ]
+  },
+  {
+    type: 'synology-nas',
+    displayName: 'Synology NAS',
+    description: 'URL del NAS + usuario y contraseña (DSM) para ver estado del sistema y reiniciarlo.',
+    category: 'nas',
+    fields: [
+      {
+        key: 'serverUrl',
+        label: 'URL del NAS',
+        type: 'url',
+        placeholder: 'https://nas.local:5001',
+        required: true,
+        hint: 'Incluye el puerto de DSM (5001 para HTTPS, 5000 para HTTP). Se aceptan certificados autofirmados.'
+      },
+      {
+        key: 'username',
+        label: 'Usuario',
+        type: 'text',
+        placeholder: 'admin',
+        required: true,
+        hint: 'Para reiniciar el NAS la cuenta debe ser administrador y no tener verificación en 2 pasos (2FA).'
+      },
+      {
+        key: 'password',
+        label: 'Contraseña',
+        type: 'password',
+        placeholder: '••••••••',
+        required: true
       }
     ]
   }

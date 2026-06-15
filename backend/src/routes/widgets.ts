@@ -21,6 +21,11 @@ import {
   type HomeAssistantEntityConfig,
   type HomeAssistantServiceCall
 } from '../widgets/home-assistant.js'
+import {
+  fetchSynologyStatus,
+  rebootSynology,
+  type SynologyConnection
+} from '../widgets/synology.js'
 import { getCredentialByIdForUser } from '../db/queries/credentials.js'
 import type { ApiResponse, Bookmark, Widget } from '../types/index.js'
 
@@ -50,7 +55,7 @@ const validateConfig = (value: unknown): Record<string, unknown> => {
   return value as Record<string, unknown>
 }
 
-const KNOWN_TYPES = new Set<string>(['hello-world', 'unraid-docker', 'docker-containers', 'notes', 'home-assistant'])
+const KNOWN_TYPES = new Set<string>(['hello-world', 'unraid-docker', 'docker-containers', 'notes', 'home-assistant', 'synology-nas'])
 
 router.post('/', (req, res) => {
   try {
@@ -301,6 +306,58 @@ router.post('/:id/homeassistant/action', async (req, res) => {
   } catch (err) {
     console.error('[homeassistant] action error:', err)
     sendError(res, 502, err instanceof Error ? err.message : 'Error ejecutando acción')
+  }
+})
+
+interface SynologyResolved {
+  widget: Widget
+  conn: SynologyConnection
+}
+
+const resolveSynologyWidget = (id: string, userId: string): SynologyResolved | { error: string; status: number } => {
+  const widget = getWidgetByIdForUser(id, userId)
+  if (!widget) return { error: 'Widget no encontrado', status: 404 }
+  if (widget.type !== 'synology-nas') return { error: 'Widget no es de tipo synology-nas', status: 400 }
+  const cfg = widget.config as { credentialId?: unknown }
+  const credentialId = typeof cfg.credentialId === 'string' ? cfg.credentialId : ''
+  if (!credentialId) return { error: 'Widget mal configurado: falta credentialId', status: 400 }
+  const credential = getCredentialByIdForUser(credentialId, userId)
+  if (!credential) return { error: 'Credencial no encontrada', status: 404 }
+  if (credential.type !== 'synology-nas') return { error: 'La credencial no es de tipo synology-nas', status: 400 }
+  const data = credential.data as { serverUrl?: unknown; username?: unknown; password?: unknown }
+  const serverUrl = typeof data.serverUrl === 'string' ? data.serverUrl : ''
+  const username = typeof data.username === 'string' ? data.username : ''
+  const password = typeof data.password === 'string' ? data.password : ''
+  if (!serverUrl || !username || !password) {
+    return { error: 'Credencial synology incompleta: faltan serverUrl, username o password', status: 400 }
+  }
+  return { widget, conn: { serverUrl, username, password } }
+}
+
+router.get('/:id/synology/status', async (req, res) => {
+  const lookup = resolveSynologyWidget(req.params.id, req.user!.id)
+  if ('error' in lookup) return sendError(res, lookup.status, lookup.error)
+  try {
+    const data = await fetchSynologyStatus(lookup.conn)
+    const response: ApiResponse<typeof data> = { success: true, data }
+    res.json(response)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Error consultando el NAS'
+    logThrottled(`synology:status:${req.params.id}:${message}`, `[synology] status error (widget ${req.params.id}): ${message}`)
+    sendError(res, 502, message)
+  }
+})
+
+router.post('/:id/synology/reboot', async (req, res) => {
+  const lookup = resolveSynologyWidget(req.params.id, req.user!.id)
+  if ('error' in lookup) return sendError(res, lookup.status, lookup.error)
+  try {
+    await rebootSynology(lookup.conn)
+    const response: ApiResponse<{ rebooting: true }> = { success: true, data: { rebooting: true } }
+    res.json(response)
+  } catch (err) {
+    console.error('[synology] reboot error:', err)
+    sendError(res, 502, err instanceof Error ? err.message : 'Error reiniciando el NAS')
   }
 })
 

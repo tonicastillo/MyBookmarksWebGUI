@@ -17,7 +17,7 @@ const sendError = (res: Response, status: number, message: string, details?: Rec
   res.status(status).json(response)
 }
 
-const KNOWN_TYPES = new Set<string>(['unraid', 'homeassistant'])
+const KNOWN_TYPES = new Set<string>(['unraid', 'homeassistant', 'synology-nas'])
 
 const validateData = (value: unknown): Record<string, unknown> => {
   if (value === null || value === undefined) return {}

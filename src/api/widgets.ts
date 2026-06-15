@@ -93,3 +93,29 @@ export const runHomeAssistantAction = async (
   )
   return unwrap(response)
 }
+
+export interface SynologyVolume {
+  id: string
+  name: string
+  status: string
+  totalBytes: number
+  usedBytes: number
+  freeBytes: number
+  usedPercent: number
+}
+
+export interface SynologyStatus {
+  cpuPercent: number
+  memPercent: number
+  volumes: SynologyVolume[]
+}
+
+export const fetchSynologyStatus = async (widgetId: string): Promise<SynologyStatus> => {
+  const response = await api.get<ApiResponse<SynologyStatus>>(`/widgets/${widgetId}/synology/status`)
+  return unwrap(response)
+}
+
+export const rebootSynology = async (widgetId: string): Promise<void> => {
+  const response = await api.post<ApiResponse<{ rebooting: true }>>(`/widgets/${widgetId}/synology/reboot`)
+  unwrap(response)
+}

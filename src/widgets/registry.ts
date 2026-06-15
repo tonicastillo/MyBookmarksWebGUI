@@ -9,6 +9,8 @@ import NotesConfig from './notes/NotesConfig.vue'
 import NotesRender from './notes/NotesRender.vue'
 import HomeAssistantConfig from './home-assistant/HomeAssistantConfig.vue'
 import HomeAssistantRender from './home-assistant/HomeAssistantRender.vue'
+import SynologyNasConfig from './synology-nas/SynologyNasConfig.vue'
+import SynologyNasRender from './synology-nas/SynologyNasRender.vue'
 
 export interface WidgetTypeDef {
   type: string
@@ -66,6 +68,14 @@ export const WIDGET_TYPES: WidgetTypeDef[] = [
     defaultConfig: { credentialId: '', title: '', pollIntervalSec: 10, entities: [] },
     ConfigComponent: HomeAssistantConfig,
     RenderComponent: HomeAssistantRender
+  },
+  {
+    type: 'synology-nas',
+    displayName: 'Synology · Estado del NAS',
+    description: 'Muestra uso de CPU, memoria y espacio de los volúmenes de un Synology NAS, y permite reiniciarlo.',
+    defaultConfig: { credentialId: '', title: '', pollIntervalSec: 10, diskWarnPercent: 85 },
+    ConfigComponent: SynologyNasConfig,
+    RenderComponent: SynologyNasRender
   }
 ]
 
