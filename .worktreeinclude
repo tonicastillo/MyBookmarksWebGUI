@@ -1,0 +1,17 @@
+# Archivos gitignored que deben copiarse al crear un worktree.
+# Necesarios para que la app arranque sin internet ni pasos manuales.
+# Un patrón por línea (estilo .gitignore).
+
+# Variables de entorno (PORT, PUBLIC_BASE_URL, etc.)
+.env
+.env.local
+.env.*.local
+
+# Datos locales: SQLite (modo WAL) + imágenes subidas
+backend/data/
+
+# Config local de Claude Code (permisos)
+.claude/settings.local.json
+
+# Config del editor
+.vscode/settings.json
