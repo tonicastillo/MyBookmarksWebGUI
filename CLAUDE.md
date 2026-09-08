@@ -108,7 +108,10 @@ Todas las respuestas JSON usan `{ success, data, error? }` (`ApiResponse<T>`).
 1. **Estado inicial (sin filtros)**: solo bookmarks con `visibleAtStart: true`, agrupados por categoría y ordenados por `category.order`.
 2. **Con búsqueda activa**: TODOS los bookmarks que coincidan (ignora `visibleAtStart`).
 3. **Con etiquetas activas**: TODOS los bookmarks con esas etiquetas (ignora `visibleAtStart`).
-4. **Búsqueda**: por nombre, subtitle y tags.
+4. **Búsqueda**: difusa (Fuse.js) por nombre, subtitle y tags. Tolera erratas
+   y transposiciones, ignora acentos y mayúsculas ("camara" encuentra "Cámara").
+   Motor y configuración en `src/composables/useFuzzySearch.ts`; con búsqueda
+   activa los resultados se ordenan por relevancia y, a igualdad, por valoración.
 
 ### Caché frontend
 - Al iniciar la app: si hay caché (aunque esté expirada), se muestra al instante; en paralelo se refresca desde el backend.

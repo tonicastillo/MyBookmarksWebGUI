@@ -12,6 +12,11 @@ import {
 } from '@/api/client'
 import { useCache } from '@/composables/useCache'
 import { groupBookmarksByParent, type BookmarkGroup } from '@/composables/useBookmarkGroups'
+import {
+  createBookmarkFuse,
+  fuzzySearchBookmarks,
+  relevanceBucket
+} from '@/composables/useFuzzySearch'
 
 const CACHE_KEY = 'bookmarks'
 
@@ -21,6 +26,13 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
   const error = ref<string | null>(null)
 
   const { saveToCache, getFromCache, isCacheValid, clearCache } = useCache()
+
+  /** Índice difuso; se reconstruye solo cuando cambia el listado. */
+  const fuse = computed(() => createBookmarkFuse(bookmarks.value))
+
+  /** Mapa `bookmarkId → score` para una consulta (vacío si no hay consulta). */
+  const fuzzyScores = (query: string): Map<string, number> =>
+    fuzzySearchBookmarks(fuse.value, bookmarks.value, query)
 
   const tagCounts = computed(() => {
     const counts = new Map<string, number>()
@@ -129,17 +141,12 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
    * `visibleAtStart` se ignora en este modo: incluye también los ocultos.
    */
   const searchAndFilterGroups = (query: string, tags: string[], categoryIds?: string[]): BookmarkGroup[] => {
-    const q = query.toLowerCase().trim()
+    const hasQuery = query.trim() !== ''
+    const scores = hasQuery ? fuzzyScores(query) : null
     const allGroups = groupBookmarksByParent(bookmarks.value)
     const categorySet = categoryIds && categoryIds.length > 0 ? new Set(categoryIds) : null
 
-    const matchesQuery = (b: Bookmark): boolean => {
-      if (!q) return true
-      const nameMatch = b.name.toLowerCase().includes(q)
-      const subtitleMatch = !!b.subtitle?.toLowerCase().includes(q)
-      const tagsMatch = b.tags.some(t => t.toLowerCase().includes(q))
-      return nameMatch || subtitleMatch || tagsMatch
-    }
+    const matchesQuery = (b: Bookmark): boolean => !scores || scores.has(b.id)
 
     const matchesTags = (b: Bookmark): boolean => {
       if (tags.length === 0) return true
@@ -149,6 +156,17 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
     const matchesCategory = (g: BookmarkGroup): boolean => {
       if (!categorySet) return true
       return !!g.bookmark.categoryId && categorySet.has(g.bookmark.categoryId)
+    }
+
+    // Relevancia del grupo = mejor (menor) score difuso entre los bookmarks
+    // del grupo que además cumplen el filtro de tags.
+    const queryScore = (g: BookmarkGroup): number => {
+      if (!scores) return 0
+      return [g.bookmark, ...g.children].reduce((best, b) => {
+        if (!matchesTags(b)) return best
+        const score = scores.get(b.id)
+        return score !== undefined && score < best ? score : best
+      }, Number.POSITIVE_INFINITY)
     }
 
     // Valoración del grupo = mayor valoración entre el lead y sus hijos.
@@ -161,21 +179,26 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
         const all = [g.bookmark, ...g.children]
         return all.some(b => matchesQuery(b) && matchesTags(b))
       })
-      // Los mejor valorados primero; Array.sort es estable, así que el resto
-      // conserva el orden original.
-      .sort((a, b) => groupScore(b) - groupScore(a))
+      // Primero por relevancia de la búsqueda (en tramos, para que pequeñas
+      // diferencias de score no manden) y después por valoración.
+      // Array.sort es estable, así que el resto conserva el orden original.
+      .sort((a, b) => {
+        if (scores) {
+          const byRelevance = relevanceBucket(queryScore(a)) - relevanceBucket(queryScore(b))
+          if (byRelevance !== 0) return byRelevance
+        }
+        return groupScore(b) - groupScore(a)
+      })
   }
 
+  /** Búsqueda difusa ordenada por relevancia (mejor coincidencia primero). */
   const search = (query: string): Bookmark[] => {
-    const q = query.toLowerCase().trim()
-    if (!q) return []
+    const scores = fuzzyScores(query)
+    if (scores.size === 0) return []
 
-    return bookmarks.value.filter(b => {
-      const nameMatch = b.name.toLowerCase().includes(q)
-      const subtitleMatch = b.subtitle?.toLowerCase().includes(q)
-      const tagsMatch = b.tags.some(t => t.toLowerCase().includes(q))
-      return nameMatch || subtitleMatch || tagsMatch
-    })
+    return bookmarks.value
+      .filter(b => scores.has(b.id))
+      .sort((a, b) => (scores.get(a.id) ?? 0) - (scores.get(b.id) ?? 0))
   }
 
   const filterByTags = (tags: string[]): Bookmark[] => {
@@ -190,13 +213,7 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
     let results = bookmarks.value
 
     if (query.trim()) {
-      const q = query.toLowerCase().trim()
-      results = results.filter(b => {
-        const nameMatch = b.name.toLowerCase().includes(q)
-        const subtitleMatch = b.subtitle?.toLowerCase().includes(q)
-        const tagsMatch = b.tags.some(t => t.toLowerCase().includes(q))
-        return nameMatch || subtitleMatch || tagsMatch
-      })
+      results = search(query)
     }
 
     if (tags.length > 0) {
