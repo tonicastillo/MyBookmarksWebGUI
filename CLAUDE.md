@@ -160,6 +160,14 @@ src/
 └── main.ts
 ```
 
+## Extensión de navegador
+
+`extension/`: extensión MV3 (Chrome y compatibles + Firefox 128+), JS sin build.
+Lee `/api/bookmarks` y `/api/categories` con la cookie de sesión, cachea en
+`chrome.storage.local`, popup con búsqueda difusa y omnibox `bm`. Detalles en
+`extension/README.md`. Si cambia la config de Fuse en `useFuzzySearch.ts`,
+replicarla en `extension/lib/search.js`.
+
 ## Variables de Entorno
 
 ```env

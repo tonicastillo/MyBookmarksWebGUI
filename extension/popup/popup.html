@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>MyBookmarks</title>
+  <link rel="stylesheet" href="popup.css">
+  <script type="module" src="popup.js"></script>
+</head>
+<body>
+  <header class="search">
+    <span id="scope" class="scope" hidden></span>
+    <input id="query" type="search" placeholder="Buscar bookmarks…" autocomplete="off" spellcheck="false" autofocus>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <form id="login" class="login" hidden>
+    <p class="login-title">Inicia sesión en <span id="login-server"></span></p>
+    <input id="username" type="text" placeholder="Usuario" autocomplete="username" required>
+    <input id="password" type="password" placeholder="Contraseña" autocomplete="current-password" required>
+    <button type="submit">Entrar</button>
+    <p id="login-error" class="error" hidden></p>
+  </form>
+
+  <main id="results" class="results" tabindex="-1"></main>
+
+  <footer class="footer">
+    <span id="status"></span>
+    <span class="hint">↵ abrir · ←→ carpetas · ⇥ buscar en sitio</span>
+    <button id="refresh" type="button" title="Sincronizar ahora">⟳</button>
+    <button id="open-app" type="button" title="Abrir MyBookmarks">↗</button>
+    <button id="open-options" type="button" title="Opciones">⚙</button>
+  </footer>
+</body>
+</html>

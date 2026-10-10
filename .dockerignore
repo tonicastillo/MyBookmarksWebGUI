@@ -49,3 +49,6 @@ Thumbs.db
 coverage
 *.test.ts
 *.spec.ts
+
+# Extensión de navegador (no forma parte de la imagen)
+extension
