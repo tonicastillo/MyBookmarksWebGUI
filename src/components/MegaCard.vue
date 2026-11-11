@@ -101,27 +101,59 @@ const handleAddChildClick = (event: MouseEvent) => {
   })
 }
 
+interface PendingSearch {
+  id: string
+  name: string
+  url: string
+}
+
 const searchQuery = ref('')
+// Búsquedas que el navegador bloqueó como pop-up: se ofrecen como enlaces.
+const pendingSearches = ref<PendingSearch[]>([])
+
+const buildSearchUrl = (tpl: string, q: string) =>
+  tpl.replace('{q}', encodeURIComponent(q))
+
+// Sin 'noopener' para que window.open devuelva la ventana y poder detectar
+// el bloqueo (null). Se corta el opener a mano justo después.
+const tryOpenTab = (url: string): boolean => {
+  const win = window.open(url, '_blank')
+  if (!win) return false
+  win.opener = null
+  return true
+}
+
 const handleSearchSubmit = (event: Event) => {
   event.preventDefault()
   event.stopPropagation()
   const q = searchQuery.value.trim()
   if (!q) return
+  pendingSearches.value = []
 
-  if (searchMode.value === 'parent') {
-    const tpl = props.parent.searchUrlTemplate
-    if (!tpl) return
-    window.open(tpl.replace('{q}', encodeURIComponent(q)), '_blank', 'noopener,noreferrer')
-    return
-  }
+  const targets: PendingSearch[] =
+    searchMode.value === 'parent' && props.parent.searchUrlTemplate
+      ? [{
+          id: props.parent.id,
+          name: props.parent.name,
+          url: buildSearchUrl(props.parent.searchUrlTemplate, q),
+        }]
+      : searchMode.value === 'children'
+        ? childrenWithSearch.value.map(child => ({
+            id: child.id,
+            name: child.name,
+            url: buildSearchUrl(child.searchUrlTemplate ?? '', q),
+          }))
+        : []
 
-  if (searchMode.value === 'children') {
-    childrenWithSearch.value.forEach(child => {
-      const tpl = child.searchUrlTemplate
-      if (!tpl) return
-      window.open(tpl.replace('{q}', encodeURIComponent(q)), '_blank', 'noopener,noreferrer')
-    })
-  }
+  pendingSearches.value = targets.filter(target => !tryOpenTab(target.url))
+}
+
+const handlePendingClick = (id: string) => {
+  pendingSearches.value = pendingSearches.value.filter(p => p.id !== id)
+}
+
+const dismissPending = () => {
+  pendingSearches.value = []
 }
 
 const handleTagClick = (tag: string) => {
@@ -201,6 +233,28 @@ const handleTagClick = (tag: string) => {
         {{ searchMode === 'children' ? `Buscar en ${childrenWithSearch.length}` : 'Buscar' }}
       </button>
     </form>
+
+    <div v-if="pendingSearches.length > 0" class="megacard-pending" role="status">
+      <div class="megacard-pending-head">
+        <span>
+          El navegador bloqueó {{ pendingSearches.length }}
+          {{ pendingSearches.length === 1 ? 'pestaña' : 'pestañas' }}. Ábrelas aquí:
+        </span>
+        <button type="button" class="megacard-pending-close" aria-label="Cerrar" @click="dismissPending">×</button>
+      </div>
+      <div class="megacard-pending-links">
+        <a
+          v-for="item in pendingSearches"
+          :key="item.id"
+          :href="item.url"
+          target="_blank"
+          rel="noopener noreferrer"
+          @click="handlePendingClick(item.id)"
+        >
+          {{ item.name }} ↗
+        </a>
+      </div>
+    </div>
 
     <div v-if="parent.tags && parent.tags.length > 0" class="megacard-tags">
       <button
@@ -370,6 +424,52 @@ const handleTagClick = (tag: string) => {
   gap: 5px;
 }
 .megacard-search button:hover { opacity: 0.88; }
+
+.megacard-pending {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 0.5px solid var(--border-strong, rgba(28, 26, 20, 0.16));
+  background: var(--bg-soft, #f3f1ec);
+  font-size: 11.5px;
+  color: var(--fg-mid, #4a463c);
+}
+.megacard-pending-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.megacard-pending-close {
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+.megacard-pending-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.megacard-pending-links a {
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--bg-elev, #ffffff);
+  border: 0.5px solid var(--border, rgba(28, 26, 20, 0.08));
+  color: var(--fg, #1c1a14);
+  text-decoration: none;
+  font-weight: 500;
+}
+.megacard-pending-links a:hover {
+  border-color: var(--border-strong, rgba(28, 26, 20, 0.16));
+}
 
 .megacard-tags {
   position: relative;
